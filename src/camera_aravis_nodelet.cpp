@@ -272,6 +272,11 @@ namespace aravis {
       LOG_GERROR_ARAVIS(err);
     }
 
+    void set_multipart_output_format(ArvCamera *cam, bool enable) {
+      GuardedGError err;
+      arv_camera_gv_set_multipart(cam, enable, err.storeError());
+      LOG_GERROR_ARAVIS(err);
+    }
 
     namespace bounds {
 
@@ -771,6 +776,9 @@ void CameraAravisNodelet::onInit()
   // spawn camera stream in thread, so onInit() is not blocked
   spawning_ = true;
   spawn_stream_thread_ = std::thread(&CameraAravisNodelet::spawnStream, this);
+
+  // enable multipart data
+  aravis::camera::set_multipart_output_format(p_camera_, true);
 }
 
 void CameraAravisNodelet::spawnStream()
