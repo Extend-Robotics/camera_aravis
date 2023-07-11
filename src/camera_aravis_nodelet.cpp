@@ -1545,6 +1545,23 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, size_t stream_id)
 
 void CameraAravisNodelet::processBuffer(ArvBuffer *p_buffer, size_t stream_id)
 {
+  ArvBufferPayloadType payloadType = arv_buffer_get_payload_type(p_buffer);
+
+  switch(payloadType)
+  {
+    case ARV_BUFFER_PAYLOAD_TYPE_IMAGE:
+        return processImageBuffer(p_buffer, stream_id);
+    case ARV_BUFFER_PAYLOAD_TYPE_CHUNK_DATA:
+        return processChunkDataBuffer(p_buffer, stream_id);
+    case ARV_BUFFER_PAYLOAD_TYPE_MULTIPART:
+        return processMultipartBuffer(p_buffer, stream_id);
+    default:
+        ROS_ERROR("Ignoring unsupported buffer type: %d", payloadType);
+  }
+}
+
+void CameraAravisNodelet::processImageBuffer(ArvBuffer *p_buffer, size_t stream_id)
+{
   const std::string &frame_id = stream_names_[stream_id].empty() ? config_.frame_id :
                                 config_.frame_id + "/" + stream_names_[stream_id];
 
@@ -1609,6 +1626,26 @@ void CameraAravisNodelet::processBuffer(ArvBuffer *p_buffer, size_t stream_id)
     resetPtpClock();
 }
 
+void CameraAravisNodelet::processChunkDataBuffer(ArvBuffer *p_buffer, size_t stream_id)
+{
+  ROS_ERROR("Ignoring chunk data buffer - NOT IMPLEMENTED");
+}
+
+void CameraAravisNodelet::processMultipartBuffer(ArvBuffer *p_buffer, size_t stream_id)
+{
+  ROS_ERROR("Ignoring multipart buffer - NOT IMPLEMENTED");
+
+  guint nparts = arv_buffer_get_n_parts(p_buffer);
+  ROS_INFO("MULTIPART buffer:");
+
+  for(guint i = 0; i < nparts; ++i)
+  {
+      size_t dataSize = 0;
+      auto data = arv_buffer_get_part_data(p_buffer, i, &dataSize);
+      auto dataType = arv_buffer_get_part_data_type(p_buffer, i);
+      ROS_INFO_STREAM("Part " << i << " size: " << dataSize << " type: " << dataType);
+  }
+}
 
 void CameraAravisNodelet::fillExtendedCameraInfoMessage(ExtendedCameraInfo &msg)
 {
