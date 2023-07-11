@@ -1540,6 +1540,13 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, size_t stream_id)
   }
 
   // at this point we have a valid buffer to work with
+  processBuffer(p_buffer, stream_id);
+}
+
+void CameraAravisNodelet::processBuffer(ArvBuffer *p_buffer, size_t stream_id)
+{
+  const std::string &frame_id = stream_names_[stream_id].empty() ? config_.frame_id :
+                                config_.frame_id + "/" + stream_names_[stream_id];
 
   // get the image message which wraps around this buffer
   sensor_msgs::ImagePtr msg_ptr = (*(p_buffer_pools_[stream_id]))[p_buffer];
@@ -1604,6 +1611,7 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, size_t stream_id)
   if (use_ptp_stamp_)
     resetPtpClock();
 }
+
 
 void CameraAravisNodelet::fillExtendedCameraInfoMessage(ExtendedCameraInfo &msg)
 {

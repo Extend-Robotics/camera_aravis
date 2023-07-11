@@ -135,6 +135,9 @@ protected:
   // Buffer Callback Helper
   void newBufferReady(ArvStream *p_stream, size_t stream_id);
 
+  // Process Validated Buffer
+  void processBuffer(ArvBuffer *p_buffer, size_t stream_id);
+
   // Clean-up if aravis device is lost
   static void controlLostCallback(ArvDevice *p_gv_device, gpointer can_instance);
 
