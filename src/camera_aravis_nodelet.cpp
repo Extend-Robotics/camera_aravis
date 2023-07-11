@@ -1552,11 +1552,8 @@ void CameraAravisNodelet::processBuffer(ArvBuffer *p_buffer, size_t stream_id)
   sensor_msgs::ImagePtr msg_ptr = (*(p_buffer_pools_[stream_id]))[p_buffer];
   // fill the meta information of image message
   // get acquisition time
-  guint64 t;
-  if (use_ptp_stamp_)
-    t = arv_buffer_get_timestamp(p_buffer);
-  else
-    t = arv_buffer_get_system_timestamp(p_buffer);
+  guint64 t = use_ptp_stamp_ ? arv_buffer_get_timestamp(p_buffer) : arv_buffer_get_system_timestamp(p_buffer);
+
   msg_ptr->header.stamp.fromNSec(t);
   // get frame sequence number
   msg_ptr->header.seq = arv_buffer_get_frame_id(p_buffer);
