@@ -1523,9 +1523,7 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, CameraAravisNodele
   arv_stream_get_n_buffers(p_stream, &n_available_buffers, NULL);
 
   if (n_available_buffers == 0)
-  {
     p_can->p_buffer_pools_[stream_id]->allocateBuffers(1);
-  }
 
   if(p_buffer == nullptr)
     return;
@@ -1545,7 +1543,6 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, CameraAravisNodele
 
   // at this point we have a valid buffer to work with
 
-  (p_can->n_buffers_)++;
   // get the image message which wraps around this buffer
   sensor_msgs::ImagePtr msg_ptr = (*(p_can->p_buffer_pools_[stream_id]))[p_buffer];
   // fill the meta information of image message

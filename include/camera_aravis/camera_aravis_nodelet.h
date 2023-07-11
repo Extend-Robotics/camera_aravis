@@ -212,7 +212,6 @@ protected:
 
   std::thread software_trigger_thread_;
   std::atomic_bool software_trigger_active_;
-  size_t n_buffers_ = 0;
 
   std::unordered_map<std::string, const bool> implemented_features_;
 
