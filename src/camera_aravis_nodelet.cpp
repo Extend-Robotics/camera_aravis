@@ -418,7 +418,7 @@ void CameraAravisNodelet::onInit()
 
   // initialize the sensor structs
   for(int i = 0; i < num_streams_; i++) {
-    sensors_.push_back(new Sensor());
+    sources_.push_back({{0}, nullptr, stream_names[i], CameraBufferPool::Ptr()});
 
     p_camera_info_managers_.push_back(NULL);
     p_camera_info_node_handles_.push_back(NULL);
@@ -430,7 +430,7 @@ void CameraAravisNodelet::onInit()
   std::vector<ConversionFunction> convert_formats = initPixelFormats();
 
   for(int i = 0; i < num_streams_; i++)
-    sources_.push_back({nullptr, stream_names[i], CameraBufferPool::Ptr(), convert_formats[i]});
+    sources_[i].convert_format = convert_formats[i];
 
   getBounds();
 
@@ -543,6 +543,8 @@ std::vector<ConversionFunction> CameraAravisNodelet::initPixelFormats()
   for(int i = 0; i < num_streams_; i++) {
     if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_,i);
 
+    Sensor &sensor = sources_[i].sensor;
+
     std::string source_selector = "Source" + std::to_string(i);
 
     if (implemented_features_["SourceSelector"])
@@ -551,17 +553,17 @@ std::vector<ConversionFunction> CameraAravisNodelet::initPixelFormats()
         aravis::device::feature::set_string(p_device_, "PixelFormat", pixel_formats[i].c_str());
 
     if (implemented_features_["PixelFormat"])
-      sensors_[i]->pixel_format = std::string(aravis::device::feature::get_string(p_device_, "PixelFormat"));
-    const auto sensor_iter = CONVERSIONS_DICTIONARY.find(sensors_[i]->pixel_format);
+      sensor.pixel_format = std::string(aravis::device::feature::get_string(p_device_, "PixelFormat"));
+    const auto sensor_iter = CONVERSIONS_DICTIONARY.find(sensor.pixel_format);
     if (sensor_iter!=CONVERSIONS_DICTIONARY.end()) {
       convert_formats.push_back(sensor_iter->second);
     }
     else {
-      ROS_WARN_STREAM("There is no known conversion from " << sensors_[i]->pixel_format << " to a usual ROS image encoding. Likely you need to implement one.");
+      ROS_WARN_STREAM("There is no known conversion from " << sensor.pixel_format << " to a usual ROS image encoding. Likely you need to implement one.");
     }
 
     if (implemented_features_["PixelFormat"])
-      sensors_[i]->n_bits_pixel = ARV_PIXEL_FORMAT_BIT_PER_PIXEL(
+      sensor.n_bits_pixel = ARV_PIXEL_FORMAT_BIT_PER_PIXEL(
           aravis::device::feature::get_integer(p_device_, "PixelFormat"));
     config_.FocusPos =
         implemented_features_["FocusPos"] ? aravis::device::feature::get_integer(p_device_, "FocusPos") : 0;
@@ -581,7 +583,7 @@ void CameraAravisNodelet::getBounds()
   for(int i = 0; i < num_streams_; i++) {
     if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_,i);
 
-    aravis::camera::get_sensor_size(p_camera_, &sensors_[i]->width, &sensors_[i]->height);
+    aravis::camera::get_sensor_size(p_camera_, &sources_[i].sensor.width, &sources_[i].sensor.height);
   }
 
   aravis::camera::bounds::get_width(p_camera_, &roi_.width_min, &roi_.width_max);
@@ -792,11 +794,11 @@ void CameraAravisNodelet::printCameraInfo()
       "    Type                 = %s",
       arv_camera_is_uv_device(p_camera_) ? "USB3Vision" :
           (arv_camera_is_gv_device(p_camera_) ? "GigEVision" : "Other"));
-  ROS_INFO("    Sensor width         = %d", sensors_[0]->width);
-  ROS_INFO("    Sensor height        = %d", sensors_[0]->height);
+  ROS_INFO("    Sensor width         = %d", sources_[0].sensor.width);
+  ROS_INFO("    Sensor height        = %d", sources_[0].sensor.height);
   ROS_INFO("    ROI x,y,w,h          = %d, %d, %d, %d", roi_.x, roi_.y, roi_.width, roi_.height);
-  ROS_INFO("    Pixel format         = %s", sensors_[0]->pixel_format.c_str());
-  ROS_INFO("    BitsPerPixel         = %lu", sensors_[0]->n_bits_pixel);
+  ROS_INFO("    Pixel format         = %s", sources_[0].sensor.pixel_format.c_str());
+  ROS_INFO("    BitsPerPixel         = %lu", sources_[0].sensor.n_bits_pixel);
   ROS_INFO(
       "    Acquisition Mode     = %s",
       implemented_features_["AcquisitionMode"] ? aravis::device::feature::get_string(p_device_, "AcquisitionMode") :
@@ -1635,8 +1637,8 @@ void CameraAravisNodelet::processImageBuffer(ArvBuffer *p_buffer, size_t stream_
   msg_ptr->header.frame_id = frame_id;
   msg_ptr->width = roi_.width;
   msg_ptr->height = roi_.height;
-  msg_ptr->encoding = sensors_[stream_id]->pixel_format;
-  msg_ptr->step = (msg_ptr->width * sensors_[stream_id]->n_bits_pixel)/8;
+  msg_ptr->encoding = sources_[stream_id].sensor.pixel_format;
+  msg_ptr->step = (msg_ptr->width * sources_[stream_id].sensor.n_bits_pixel)/8;
 
   // do the magic of conversion into a ROS format
   if (sources_[stream_id].convert_format) {

@@ -98,8 +98,17 @@ private:
 
   gint num_streams_ = 0;
 
+  struct Sensor
+  {
+    int32_t width = 0;
+    int32_t height = 0;
+    std::string pixel_format;
+    size_t n_bits_pixel = 0;
+  };
+
   struct Source
   {
+    Sensor sensor;
     ArvStream *p_stream;
     std::string stream_name;
     CameraBufferPool::Ptr p_buffer_pool;
@@ -251,16 +260,6 @@ protected:
     int32_t height_min = 0;
     int32_t height_max = 0;
   } roi_;
-
-  struct Sensor
-  {
-    int32_t width = 0;
-    int32_t height = 0;
-    std::string pixel_format;
-    size_t n_bits_pixel = 0;
-  };
-
-  std::vector<Sensor *> sensors_;
 
   struct StreamIdData
   {
