@@ -97,11 +97,18 @@ private:
   ArvDevice *p_device_ = NULL;
 
   gint num_streams_ = 0;
-  std::vector<ArvStream *> p_streams_;
-  std::vector<std::string> stream_names_;
-  std::vector<CameraBufferPool::Ptr> p_buffer_pools_;
+
+  struct Source
+  {
+    ArvStream *p_stream;
+    std::string stream_name;
+    CameraBufferPool::Ptr p_buffer_pool;
+    ConversionFunction convert_format;
+  };
+
+  std::vector<Source> sources_;
+
   int32_t acquire_ = 0;
-  std::vector<ConversionFunction> convert_formats;
 
   virtual void onInit() override;
   void spawnStream();
