@@ -554,7 +554,7 @@ void CameraAravisNodelet::onInit()
     }
 
     if (implemented_features_["AcquisitionFrameRateEnable"]) {
-      aravis::device::feature::set_integer(p_device_, "AcquisitionFrameRateEnable", 1);
+      aravis::device::feature::set_boolean(p_device_, "AcquisitionFrameRateEnable", true);
     }
     if (implemented_features_["AcquisitionFrameRate"]) {
       aravis::camera::set_frame_rate(p_camera_, config_.AcquisitionFrameRate);
