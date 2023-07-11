@@ -111,6 +111,17 @@ private:
   int32_t acquire_ = 0;
 
   virtual void onInit() override;
+  void connectToCamera();
+  void discoverStreams(size_t stream_names_size);
+  std::vector<ConversionFunction> initPixelFormats();
+  void getBounds();
+  void setUSBMode();
+  void setCameraSettings();
+  void readCameraSettings();
+  void publish_tf_optical();
+  void initCalibration();
+  void printCameraInfo();
+
   void spawnStream();
 
 
