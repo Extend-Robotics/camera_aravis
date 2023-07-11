@@ -1501,14 +1501,17 @@ void CameraAravisNodelet::newBufferReadyCallback(ArvStream *p_stream, gpointer c
   size_t stream_id = data->stream_id;
   image_transport::CameraPublisher *p_cam_pub = &p_can->cam_pubs_[stream_id];
 
-  if( p_can->stream_names_[stream_id].empty() )
-  {
-    newBufferReady(p_stream, p_can, p_can->config_.frame_id, stream_id);
-  } else {
-    const std::string stream_frame_id = p_can->config_.frame_id + "/" + p_can->stream_names_[stream_id];
-    newBufferReady(p_stream, p_can, stream_frame_id, stream_id);
-  }
+  const std::string &frame_id = p_can->stream_names_[stream_id].empty() ? p_can->config_.frame_id :
+                                p_can->config_.frame_id + "/" + p_can->stream_names_[stream_id];
 
+  newBufferReady(p_stream, p_can, frame_id, stream_id);
+
+  // publish current lighting settings if this camera is configured as master
+  if (p_can->config_.AutoMaster)
+  {
+    p_can->syncAutoParameters();
+    p_can->auto_pub_.publish(p_can->auto_params_);
+  }
 }
 
 void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, CameraAravisNodelet *p_can, std::string frame_id, size_t stream_id)
@@ -1599,13 +1602,6 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, CameraAravisNodele
       }
       arv_stream_push_buffer(p_stream, p_buffer);
     }
-  }
-
-  // publish current lighting settings if this camera is configured as master
-  if (p_can->config_.AutoMaster)
-  {
-    p_can->syncAutoParameters();
-    p_can->auto_pub_.publish(p_can->auto_params_);
   }
 }
 
