@@ -1494,17 +1494,12 @@ void CameraAravisNodelet::rosConnectCallback()
 
 void CameraAravisNodelet::newBufferReadyCallback(ArvStream *p_stream, gpointer can_instance)
 {
-
   // workaround to get access to the instance from a static method
   StreamIdData *data = (StreamIdData*) can_instance;
   CameraAravisNodelet *p_can = (CameraAravisNodelet*) data->can;
   size_t stream_id = data->stream_id;
-  image_transport::CameraPublisher *p_cam_pub = &p_can->cam_pubs_[stream_id];
 
-  const std::string &frame_id = p_can->stream_names_[stream_id].empty() ? p_can->config_.frame_id :
-                                p_can->config_.frame_id + "/" + p_can->stream_names_[stream_id];
-
-  p_can->newBufferReady(p_stream, frame_id, stream_id);
+  p_can->newBufferReady(p_stream, stream_id);
 
   // publish current lighting settings if this camera is configured as master
   if (p_can->config_.AutoMaster)
@@ -1514,7 +1509,7 @@ void CameraAravisNodelet::newBufferReadyCallback(ArvStream *p_stream, gpointer c
   }
 }
 
-void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, std::string frame_id, size_t stream_id)
+void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, size_t stream_id)
 {
   ArvBuffer *p_buffer = arv_stream_try_pop_buffer(p_stream);
 
@@ -1531,6 +1526,9 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, std::string frame_
   bool buffer_success = arv_buffer_get_status(p_buffer) == ARV_BUFFER_STATUS_SUCCESS;
   bool buffer_pool = (bool)p_buffer_pools_[stream_id];
   bool has_subscribers = cam_pubs_[stream_id].getNumSubscribers();
+
+  const std::string &frame_id = stream_names_[stream_id].empty() ? config_.frame_id :
+                                config_.frame_id + "/" + stream_names_[stream_id];
 
   if (!buffer_success)
     ROS_WARN("(%s) Frame error: %s", frame_id.c_str(), szBufferStatusFromInt[arv_buffer_get_status(p_buffer)]);
