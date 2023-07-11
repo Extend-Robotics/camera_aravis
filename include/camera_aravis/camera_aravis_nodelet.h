@@ -133,7 +133,7 @@ protected:
   static void newBufferReadyCallback(ArvStream *p_stream, gpointer can_instance);
 
   // Buffer Callback Helper
-  static void newBufferReady(ArvStream *p_stream, CameraAravisNodelet *p_can, std::string frame_id, size_t stream_id);
+  void newBufferReady(ArvStream *p_stream, std::string frame_id, size_t stream_id);
 
   // Clean-up if aravis device is lost
   static void controlLostCallback(ArvDevice *p_gv_device, gpointer can_instance);

@@ -1504,7 +1504,7 @@ void CameraAravisNodelet::newBufferReadyCallback(ArvStream *p_stream, gpointer c
   const std::string &frame_id = p_can->stream_names_[stream_id].empty() ? p_can->config_.frame_id :
                                 p_can->config_.frame_id + "/" + p_can->stream_names_[stream_id];
 
-  newBufferReady(p_stream, p_can, frame_id, stream_id);
+  p_can->newBufferReady(p_stream, frame_id, stream_id);
 
   // publish current lighting settings if this camera is configured as master
   if (p_can->config_.AutoMaster)
@@ -1514,7 +1514,7 @@ void CameraAravisNodelet::newBufferReadyCallback(ArvStream *p_stream, gpointer c
   }
 }
 
-void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, CameraAravisNodelet *p_can, std::string frame_id, size_t stream_id)
+void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, std::string frame_id, size_t stream_id)
 {
   ArvBuffer *p_buffer = arv_stream_try_pop_buffer(p_stream);
 
@@ -1523,14 +1523,14 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, CameraAravisNodele
   arv_stream_get_n_buffers(p_stream, &n_available_buffers, NULL);
 
   if (n_available_buffers == 0)
-    p_can->p_buffer_pools_[stream_id]->allocateBuffers(1);
+    p_buffer_pools_[stream_id]->allocateBuffers(1);
 
   if(p_buffer == nullptr)
     return;
 
   bool buffer_success = arv_buffer_get_status(p_buffer) == ARV_BUFFER_STATUS_SUCCESS;
-  bool buffer_pool = (bool)p_can->p_buffer_pools_[stream_id];
-  bool has_subscribers = p_can->cam_pubs_[stream_id].getNumSubscribers();
+  bool buffer_pool = (bool)p_buffer_pools_[stream_id];
+  bool has_subscribers = cam_pubs_[stream_id].getNumSubscribers();
 
   if (!buffer_success)
     ROS_WARN("(%s) Frame error: %s", frame_id.c_str(), szBufferStatusFromInt[arv_buffer_get_status(p_buffer)]);
@@ -1544,11 +1544,11 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, CameraAravisNodele
   // at this point we have a valid buffer to work with
 
   // get the image message which wraps around this buffer
-  sensor_msgs::ImagePtr msg_ptr = (*(p_can->p_buffer_pools_[stream_id]))[p_buffer];
+  sensor_msgs::ImagePtr msg_ptr = (*(p_buffer_pools_[stream_id]))[p_buffer];
   // fill the meta information of image message
   // get acquisition time
   guint64 t;
-  if (p_can->use_ptp_stamp_)
+  if (use_ptp_stamp_)
     t = arv_buffer_get_timestamp(p_buffer);
   else
     t = arv_buffer_get_system_timestamp(p_buffer);
@@ -1557,25 +1557,25 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, CameraAravisNodele
   msg_ptr->header.seq = arv_buffer_get_frame_id(p_buffer);
   // fill other stream properties
   msg_ptr->header.frame_id = frame_id;
-  msg_ptr->width = p_can->roi_.width;
-  msg_ptr->height = p_can->roi_.height;
-  msg_ptr->encoding = p_can->sensors_[stream_id]->pixel_format;
-  msg_ptr->step = (msg_ptr->width * p_can->sensors_[stream_id]->n_bits_pixel)/8;
+  msg_ptr->width = roi_.width;
+  msg_ptr->height = roi_.height;
+  msg_ptr->encoding = sensors_[stream_id]->pixel_format;
+  msg_ptr->step = (msg_ptr->width * sensors_[stream_id]->n_bits_pixel)/8;
 
   // do the magic of conversion into a ROS format
-  if (p_can->convert_formats[stream_id]) {
-    sensor_msgs::ImagePtr cvt_msg_ptr = p_can->p_buffer_pools_[stream_id]->getRecyclableImg();
-    p_can->convert_formats[stream_id](msg_ptr, cvt_msg_ptr);
+  if (convert_formats[stream_id]) {
+    sensor_msgs::ImagePtr cvt_msg_ptr = p_buffer_pools_[stream_id]->getRecyclableImg();
+    convert_formats[stream_id](msg_ptr, cvt_msg_ptr);
     msg_ptr = cvt_msg_ptr;
   }
 
   // get current CameraInfo data
-  if (!p_can->camera_infos_[stream_id]) {
-    p_can->camera_infos_[stream_id].reset(new sensor_msgs::CameraInfo);
+  if (!camera_infos_[stream_id]) {
+    camera_infos_[stream_id].reset(new sensor_msgs::CameraInfo);
   }
-  (*p_can->camera_infos_[stream_id]) = p_can->p_camera_info_managers_[stream_id]->getCameraInfo();
-  p_can->camera_infos_[stream_id]->header = msg_ptr->header;
-  if (p_can->camera_infos_[stream_id]->width == 0 || p_can->camera_infos_[stream_id]->height == 0) {
+  (*camera_infos_[stream_id]) = p_camera_info_managers_[stream_id]->getCameraInfo();
+  camera_infos_[stream_id]->header = msg_ptr->header;
+  if (camera_infos_[stream_id]->width == 0 || camera_infos_[stream_id]->height == 0) {
     ROS_WARN_STREAM_ONCE(
         "The fields image_width and image_height seem not to be set in "
         "the YAML specified by 'camera_info_url' parameter. Please set "
@@ -1583,28 +1583,28 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, CameraAravisNodele
         "can be different due to the region of interest (ROI) feature. In "
         "the YAML the image size should be the one on which the camera was "
         "calibrated. See CameraInfo.msg specification!");
-    p_can->camera_infos_[stream_id]->width = p_can->roi_.width;
-    p_can->camera_infos_[stream_id]->height = p_can->roi_.height;
+    camera_infos_[stream_id]->width = roi_.width;
+    camera_infos_[stream_id]->height = roi_.height;
   }
 
 
-  p_can->cam_pubs_[stream_id].publish(msg_ptr, p_can->camera_infos_[stream_id]);
+  cam_pubs_[stream_id].publish(msg_ptr, camera_infos_[stream_id]);
 
-  if (p_can->pub_ext_camera_info_) {
+  if (pub_ext_camera_info_) {
     ExtendedCameraInfo extended_camera_info_msg;
-    p_can->extended_camera_info_mutex_.lock();
+    extended_camera_info_mutex_.lock();
 
-    if (arv_camera_is_gv_device(p_can->p_camera_)) aravis::camera::gv::select_stream_channel(p_can->p_camera_, stream_id);
+    if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_, stream_id);
 
-    extended_camera_info_msg.camera_info = *(p_can->camera_infos_[stream_id]);
-    p_can->fillExtendedCameraInfoMessage(extended_camera_info_msg);
-    p_can->extended_camera_info_mutex_.unlock();
-    p_can->extended_camera_info_pubs_[stream_id].publish(extended_camera_info_msg);
+    extended_camera_info_msg.camera_info = *(camera_infos_[stream_id]);
+    fillExtendedCameraInfoMessage(extended_camera_info_msg);
+    extended_camera_info_mutex_.unlock();
+    extended_camera_info_pubs_[stream_id].publish(extended_camera_info_msg);
   }
 
   // check PTP status, camera cannot recover from "Faulty" by itself
-  if (p_can->use_ptp_stamp_)
-    p_can->resetPtpClock();
+  if (use_ptp_stamp_)
+    resetPtpClock();
 }
 
 void CameraAravisNodelet::fillExtendedCameraInfoMessage(ExtendedCameraInfo &msg)
