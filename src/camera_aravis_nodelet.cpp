@@ -329,58 +329,51 @@ CameraAravisNodelet::CameraAravisNodelet()
 
 CameraAravisNodelet::~CameraAravisNodelet()
 {
-  for(int i=0; i < p_streams_.size(); i++) {
-    if(p_streams_[i]) {
-      arv_stream_set_emit_signals(p_streams_[i], FALSE);
-    }
-  }
+  for(int i=0; i < sources_.size(); i++)
+    if(sources_[i].p_stream)
+      arv_stream_set_emit_signals(sources_[i].p_stream, FALSE);
 
   spawning_ = false;
+
   if (spawn_stream_thread_.joinable())
-  {
     spawn_stream_thread_.join();
-  }
 
   software_trigger_active_ = false;
+
   if (software_trigger_thread_.joinable())
-  {
     software_trigger_thread_.join();
-  }
 
   tf_thread_active_ = false;
+
   if (tf_dyn_thread_.joinable())
-  {
     tf_dyn_thread_.join();
-  }
 
-
-  for(int i=0; i < p_streams_.size(); i++) {
+  for(int i=0; i < sources_.size(); i++)
+  {
     guint64 n_completed_buffers = 0;
     guint64 n_failures = 0;
     guint64 n_underruns = 0;
-    arv_stream_get_statistics(p_streams_[i], &n_completed_buffers, &n_failures, &n_underruns);
+    arv_stream_get_statistics(sources_[i].p_stream, &n_completed_buffers, &n_failures, &n_underruns);
     ROS_INFO("Completed buffers = %Lu", (unsigned long long ) n_completed_buffers);
     ROS_INFO("Failures          = %Lu", (unsigned long long ) n_failures);
     ROS_INFO("Underruns         = %Lu", (unsigned long long ) n_underruns);
     if (arv_camera_is_gv_device(p_camera_))
     {
-    guint64 n_resent;
-    guint64 n_missing;
-    arv_gv_stream_get_statistics(reinterpret_cast<ArvGvStream*>(p_streams_[i]), &n_resent, &n_missing);
-    ROS_INFO("Resent buffers    = %Lu", (unsigned long long ) n_resent);
-    ROS_INFO("Missing           = %Lu", (unsigned long long ) n_missing);
+      guint64 n_resent;
+      guint64 n_missing;
+      arv_gv_stream_get_statistics(reinterpret_cast<ArvGvStream*>(sources_[i].p_stream), &n_resent, &n_missing);
+      ROS_INFO("Resent buffers    = %Lu", (unsigned long long ) n_resent);
+      ROS_INFO("Missing           = %Lu", (unsigned long long ) n_missing);
     }
   }
 
 
   if (p_device_)
-  {
     aravis::device::execute_command(p_device_, "AcquisitionStop");
-  }
 
-  for(int i = 0; i < p_streams_.size(); i++) {
-      g_object_unref(p_streams_[i]);
-  }
+  for(int i = 0; i < sources_.size(); i++)
+      g_object_unref(sources_[i].p_stream);
+
   g_object_unref(p_camera_);
 }
 
@@ -393,25 +386,84 @@ void CameraAravisNodelet::onInit()
   guid_ = pnh.param<std::string>("guid", guid_); // Get the camera guid as a parameter or use the first device.
   use_ptp_stamp_ = pnh.param<bool>("use_ptp_timestamp", use_ptp_stamp_);
   pub_ext_camera_info_ = pnh.param<bool>("ExtendedCameraInfo", pub_ext_camera_info_); // publish an extended camera info message
-  pub_tf_optical_ = pnh.param<bool>("publish_tf", pub_tf_optical_); // should we publish tf transforms to camera optical frame?
+
+  // Get other (non GenIcam) parameter current values.
+  pnh.param<double>("softwaretriggerrate", config_.softwaretriggerrate, config_.softwaretriggerrate);
+  pnh.param<int>("mtu", config_.mtu, config_.mtu);
+  pnh.param<std::string>("frame_id", config_.frame_id, config_.frame_id);
+  pnh.param<bool>("auto_master", config_.AutoMaster, config_.AutoMaster);
+  pnh.param<bool>("auto_slave", config_.AutoSlave, config_.AutoSlave);
 
   std::string stream_channel_args;
+  std::vector<std::string> stream_names;
+
   if (pnh.getParam("channel_names", stream_channel_args)) {
-    parseStringArgs(stream_channel_args, stream_names_);
+    parseStringArgs(stream_channel_args, stream_names);
   } else {
-    stream_names_ = { "" };
+    stream_names = { "" };
   }
 
-  std::string pixel_format_args;
-  std::vector<std::string> pixel_formats;
-  pnh.param("PixelFormat", pixel_format_args, pixel_format_args);
-  parseStringArgs(pixel_format_args, pixel_formats);
+  connectToCamera();
 
-  std::string calib_url_args;
-  std::vector<std::string> calib_urls;
-  pnh.param("camera_info_url", calib_url_args, calib_url_args);
-  parseStringArgs(calib_url_args, calib_urls);
+  // Start the dynamic_reconfigure server.
+  reconfigure_server_.reset(new dynamic_reconfigure::Server<Config>(reconfigure_mutex_, pnh));
+  reconfigure_server_->getConfigDefault(config_);
+  reconfigure_server_->getConfigMin(config_min_);
+  reconfigure_server_->getConfigMax(config_max_);
 
+  // See which features exist in this camera device
+  discoverFeatures();
+
+  discoverStreams(stream_names.size());
+
+  // initialize the sensor structs
+  for(int i = 0; i < num_streams_; i++) {
+    sources_.push_back({{0}, nullptr, stream_names[i], CameraBufferPool::Ptr()});
+  }
+
+  std::vector<ConversionFunction> convert_formats = initPixelFormats();
+
+  for(int i = 0; i < num_streams_; i++)
+    sources_[i].convert_format = convert_formats[i];
+
+  getBounds();
+
+  setUSBMode();
+
+  setCameraSettings();
+
+  readCameraSettings();
+
+  setAutoMaster(config_.AutoMaster);
+  setAutoSlave(config_.AutoSlave);
+
+  publish_tf_optical();
+
+  initCalibration();
+
+  // update the reconfigure config
+  reconfigure_server_->setConfigMin(config_min_);
+  reconfigure_server_->setConfigMax(config_max_);
+  reconfigure_server_->updateConfig(config_);
+  ros::Duration(2.0).sleep();
+  reconfigure_server_->setCallback(boost::bind(&CameraAravisNodelet::rosReconfigureCallback, this, _1, _2));
+
+  printCameraInfo();
+
+  // Reset PTP clock
+  if (use_ptp_stamp_)
+    resetPtpClock();
+
+  // enable multipart data
+  aravis::camera::set_multipart_output_format(p_camera_, true);
+
+  // spawn camera stream in thread, so onInit() is not blocked
+  spawning_ = true;
+  spawn_stream_thread_ = std::thread(&CameraAravisNodelet::spawnStream, this);
+}
+
+void CameraAravisNodelet::connectToCamera()
+{
   // Print out some useful info.
   ROS_INFO("Attached cameras:");
   arv_update_device_list();
@@ -447,17 +499,11 @@ void CameraAravisNodelet::onInit()
 
   p_device_ = arv_camera_get_device(p_camera_);
   ROS_INFO("Opened: %s-%s", aravis::camera::get_vendor_name(p_camera_),
-           aravis::device::feature::get_string(p_device_, "DeviceSerialNumber"));
+  aravis::device::feature::get_string(p_device_, "DeviceSerialNumber"));
+}
 
-  // Start the dynamic_reconfigure server.
-  reconfigure_server_.reset(new dynamic_reconfigure::Server<Config>(reconfigure_mutex_, pnh));
-  reconfigure_server_->getConfigDefault(config_);
-  reconfigure_server_->getConfigMin(config_min_);
-  reconfigure_server_->getConfigMax(config_max_);
-
-  // See which features exist in this camera device
-  discoverFeatures();
-
+void CameraAravisNodelet::discoverStreams(size_t stream_names_size)
+{
   // Check the number of streams for this camera
   num_streams_ = arv_device_get_integer_feature_value(p_device_, "DeviceStreamChannelCount", nullptr);
   // if this return 0, try the deprecated GevStreamChannelCount in case this is an older camera
@@ -473,22 +519,56 @@ void CameraAravisNodelet::onInit()
   ROS_INFO("Number of supported stream channels %i.", (int) num_streams_);
 
   // check if every stream channel has been given a channel name
-  if (stream_names_.size() < num_streams_) {
-    num_streams_ = stream_names_.size();
-  }
+  if (stream_names_size < num_streams_)
+    num_streams_ = stream_names_size;
+}
 
-  // initialize the sensor structs
+std::vector<ConversionFunction> CameraAravisNodelet::initPixelFormats()
+{
+  ros::NodeHandle pnh = getPrivateNodeHandle();
+  std::string pixel_format_args;
+  std::vector<std::string> pixel_formats;
+  pnh.param("PixelFormat", pixel_format_args, pixel_format_args);
+  parseStringArgs(pixel_format_args, pixel_formats);
+
+  std::vector<ConversionFunction> convert_formats;
+
+  // get pixel format name and translate into corresponding ROS name
   for(int i = 0; i < num_streams_; i++) {
-    sensors_.push_back(new Sensor());
-    p_streams_.push_back(NULL);
-    p_buffer_pools_.push_back(CameraBufferPool::Ptr());
-    p_camera_info_managers_.push_back(NULL);
-    p_camera_info_node_handles_.push_back(NULL);
-    camera_infos_.push_back(sensor_msgs::CameraInfoPtr());
-    cam_pubs_.push_back(image_transport::CameraPublisher());
-    extended_camera_info_pubs_.push_back(ros::Publisher());
+    if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_,i);
+
+    Sensor &sensor = sources_[i].sensor;
+
+    std::string source_selector = "Source" + std::to_string(i);
+
+    if (implemented_features_["SourceSelector"])
+        aravis::device::feature::set_string(p_device_, "SourceSelector", source_selector.c_str());
+    if (implemented_features_["PixelFormat"] && pixel_formats[i].size())
+        aravis::device::feature::set_string(p_device_, "PixelFormat", pixel_formats[i].c_str());
+
+    if (implemented_features_["PixelFormat"])
+      sensor.pixel_format = std::string(aravis::device::feature::get_string(p_device_, "PixelFormat"));
+    const auto sensor_iter = CONVERSIONS_DICTIONARY.find(sensor.pixel_format);
+    if (sensor_iter!=CONVERSIONS_DICTIONARY.end()) {
+      convert_formats.push_back(sensor_iter->second);
+    }
+    else {
+      ROS_WARN_STREAM("There is no known conversion from " << sensor.pixel_format << " to a usual ROS image encoding. Likely you need to implement one.");
+    }
+
+    if (implemented_features_["PixelFormat"])
+      sensor.n_bits_pixel = ARV_PIXEL_FORMAT_BIT_PER_PIXEL(
+          aravis::device::feature::get_integer(p_device_, "PixelFormat"));
+    config_.FocusPos =
+        implemented_features_["FocusPos"] ? aravis::device::feature::get_integer(p_device_, "FocusPos") : 0;
+
   }
 
+  return convert_formats;
+}
+
+void CameraAravisNodelet::getBounds()
+{
   // Get parameter bounds.
   aravis::camera::bounds::get_exposure_time(p_camera_, &config_min_.ExposureTime, &config_max_.ExposureTime);
 
@@ -497,7 +577,7 @@ void CameraAravisNodelet::onInit()
   for(int i = 0; i < num_streams_; i++) {
     if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_,i);
 
-    aravis::camera::get_sensor_size(p_camera_, &sensors_[i]->width, &sensors_[i]->height);
+    aravis::camera::get_sensor_size(p_camera_, &sources_[i].sensor.width, &sources_[i].sensor.height);
   }
 
   aravis::camera::bounds::get_width(p_camera_, &roi_.width_min, &roi_.width_max);
@@ -517,8 +597,13 @@ void CameraAravisNodelet::onInit()
     config_min_.FocusPos = 0;
     config_max_.FocusPos = 0;
   }
+}
 
+void CameraAravisNodelet::setUSBMode()
+{
 #if ARAVIS_HAS_USB_MODE
+  ros::NodeHandle pnh = getPrivateNodeHandle();
+
   ArvUvUsbMode usb_mode = ARV_UV_USB_MODE_DEFAULT;
   // ArvUvUsbMode mode = ARV_UV_USB_MODE_SYNC;
   // ArvUvUsbMode mode = ARV_UV_USB_MODE_ASYNC;
@@ -538,7 +623,10 @@ void CameraAravisNodelet::onInit()
   }
   if (arv_camera_is_uv_device(p_camera_)) arv_uv_device_set_usb_mode(ARV_UV_DEVICE(p_device_), usb_mode);
 #endif
+}
 
+void CameraAravisNodelet::setCameraSettings()
+{
   for(int i = 0; i < num_streams_; i++) {
     if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_, i);
 
@@ -573,7 +661,10 @@ void CameraAravisNodelet::onInit()
     // possibly set or override from given parameter
     writeCameraFeaturesFromRosparam();
   }
+}
 
+void CameraAravisNodelet::readCameraSettings()
+{
   // get current state of camera for config_
   aravis::camera::get_region(p_camera_, &roi_.x, &roi_.y, &roi_.width, &roi_.height);
   config_.AcquisitionMode =
@@ -592,73 +683,50 @@ void CameraAravisNodelet::onInit()
   config_.TriggerSource =
       implemented_features_["TriggerSource"] ? aravis::device::feature::get_string(p_device_, "TriggerSource") :
           "Software";
+}
 
-  // get pixel format name and translate into corresponding ROS name
-  for(int i = 0; i < num_streams_; i++) {
-    if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_,i);
+void CameraAravisNodelet::publish_tf_optical()
+{
+  ros::NodeHandle pnh = getPrivateNodeHandle();
+  pub_tf_optical_ = pnh.param<bool>("publish_tf", pub_tf_optical_); // should we publish tf transforms to camera optical frame?
 
-    std::string source_selector = "Source" + std::to_string(i);
+  if (!pub_tf_optical_)
+    return;
 
-    if (implemented_features_["SourceSelector"])
-        aravis::device::feature::set_string(p_device_, "SourceSelector", source_selector.c_str());
-    if (implemented_features_["PixelFormat"] && pixel_formats[i].size())
-        aravis::device::feature::set_string(p_device_, "PixelFormat", pixel_formats[i].c_str());
+  tf_optical_.header.frame_id = config_.frame_id;
+  tf_optical_.child_frame_id = config_.frame_id + "_optical";
+  tf_optical_.transform.translation.x = 0.0;
+  tf_optical_.transform.translation.y = 0.0;
+  tf_optical_.transform.translation.z = 0.0;
+  tf_optical_.transform.rotation.x = -0.5;
+  tf_optical_.transform.rotation.y = 0.5;
+  tf_optical_.transform.rotation.z = -0.5;
+  tf_optical_.transform.rotation.w = 0.5;
 
-    if (implemented_features_["PixelFormat"])
-      sensors_[i]->pixel_format = std::string(aravis::device::feature::get_string(p_device_, "PixelFormat"));
-    const auto sensor_iter = CONVERSIONS_DICTIONARY.find(sensors_[i]->pixel_format);
-    if (sensor_iter!=CONVERSIONS_DICTIONARY.end()) {
-      convert_formats.push_back(sensor_iter->second);
-    }
-    else {
-      ROS_WARN_STREAM("There is no known conversion from " << sensors_[i]->pixel_format << " to a usual ROS image encoding. Likely you need to implement one.");
-    }
-
-    if (implemented_features_["PixelFormat"])
-      sensors_[i]->n_bits_pixel = ARV_PIXEL_FORMAT_BIT_PER_PIXEL(
-          aravis::device::feature::get_integer(p_device_, "PixelFormat"));
-    config_.FocusPos =
-        implemented_features_["FocusPos"] ? aravis::device::feature::get_integer(p_device_, "FocusPos") : 0;
-
-  }
-
-  // Get other (non GenIcam) parameter current values.
-  pnh.param<double>("softwaretriggerrate", config_.softwaretriggerrate, config_.softwaretriggerrate);
-  pnh.param<int>("mtu", config_.mtu, config_.mtu);
-  pnh.param<std::string>("frame_id", config_.frame_id, config_.frame_id);
-  pnh.param<bool>("auto_master", config_.AutoMaster, config_.AutoMaster);
-  pnh.param<bool>("auto_slave", config_.AutoSlave, config_.AutoSlave);
-  setAutoMaster(config_.AutoMaster);
-  setAutoSlave(config_.AutoSlave);
-
-  if (pub_tf_optical_)
+  double tf_publish_rate;
+  pnh.param<double>("tf_publish_rate", tf_publish_rate, 0);
+  if (tf_publish_rate > 0.)
   {
-    tf_optical_.header.frame_id = config_.frame_id;
-    tf_optical_.child_frame_id = config_.frame_id + "_optical";
-    tf_optical_.transform.translation.x = 0.0;
-    tf_optical_.transform.translation.y = 0.0;
-    tf_optical_.transform.translation.z = 0.0;
-    tf_optical_.transform.rotation.x = -0.5;
-    tf_optical_.transform.rotation.y = 0.5;
-    tf_optical_.transform.rotation.z = -0.5;
-    tf_optical_.transform.rotation.w = 0.5;
-
-    double tf_publish_rate;
-    pnh.param<double>("tf_publish_rate", tf_publish_rate, 0);
-    if (tf_publish_rate > 0.)
-    {
-      // publish dynamic tf at given rate (recommended when running as a Nodelet, since latching has bugs-by-design)
-      p_tb_.reset(new tf2_ros::TransformBroadcaster());
-      tf_dyn_thread_ = std::thread(&CameraAravisNodelet::publishTfLoop, this, tf_publish_rate);
-    }
-    else
-    {
-      // publish static tf only once (latched)
-      p_stb_.reset(new tf2_ros::StaticTransformBroadcaster());
-      tf_optical_.header.stamp = ros::Time::now();
-      p_stb_->sendTransform(tf_optical_);
-    }
+    // publish dynamic tf at given rate (recommended when running as a Nodelet, since latching has bugs-by-design)
+    p_tb_.reset(new tf2_ros::TransformBroadcaster());
+    tf_dyn_thread_ = std::thread(&CameraAravisNodelet::publishTfLoop, this, tf_publish_rate);
   }
+  else
+  {
+    // publish static tf only once (latched)
+    p_stb_.reset(new tf2_ros::StaticTransformBroadcaster());
+    tf_optical_.header.stamp = ros::Time::now();
+    p_stb_->sendTransform(tf_optical_);
+  }
+}
+
+void CameraAravisNodelet::initCalibration()
+{
+  ros::NodeHandle pnh = getPrivateNodeHandle();
+  std::string calib_url_args;
+  std::vector<std::string> calib_urls;
+  pnh.param("camera_info_url", calib_url_args, calib_url_args);
+  parseStringArgs(calib_url_args, calib_urls);
 
   // default calibration url is [DeviceSerialNumber/DeviceID].yaml
   if(calib_urls[0].empty()) {
@@ -687,32 +755,31 @@ void CameraAravisNodelet::onInit()
   for(int i = 0; i < num_streams_; i++) {
     // Start the camerainfo manager.
     std::string camera_info_frame_id = config_.frame_id;
-    if(!stream_names_[i].empty())
-      camera_info_frame_id = config_.frame_id + '/' + stream_names_[i];
+    Source &src = sources_[i];
+
+    if(!src.stream_name.empty())
+      camera_info_frame_id = config_.frame_id + '/' + src.stream_name;
 
     // Use separate node handles for CameraInfoManagers when using a Multisource Camera
-    if(!stream_names_[i].empty()) {
-      p_camera_info_node_handles_[i].reset(new ros::NodeHandle(pnh, stream_names_[i]));
-      p_camera_info_managers_[i].reset(new camera_info_manager::CameraInfoManager(*p_camera_info_node_handles_[i], camera_info_frame_id, calib_urls[i]));
+    if(!src.stream_name.empty()) {
+      src.p_camera_info_node_handle.reset(new ros::NodeHandle(pnh, src.stream_name));
+      src.p_camera_info_manager.reset(new camera_info_manager::CameraInfoManager(*src.p_camera_info_node_handle, camera_info_frame_id, calib_urls[i]));
+
     } else {
-      p_camera_info_managers_[i].reset(new camera_info_manager::CameraInfoManager(pnh, camera_info_frame_id, calib_urls[i]));
+      src.p_camera_info_manager.reset(new camera_info_manager::CameraInfoManager(pnh, camera_info_frame_id, calib_urls[i]));
     }
 
 
-    ROS_INFO("Reset %s Camera Info Manager", stream_names_[i].c_str());
-    ROS_INFO("%s Calib URL: %s", stream_names_[i].c_str(), calib_urls[i].c_str());
+    ROS_INFO("Reset %s Camera Info Manager", sources_[i].stream_name.c_str());
+    ROS_INFO("%s Calib URL: %s", sources_[i].stream_name.c_str(), calib_urls[i].c_str());
 
     // publish an ExtendedCameraInfo message
-    setExtendedCameraInfo(stream_names_[i], i);
+    setExtendedCameraInfo(sources_[i].stream_name, i);
   }
+}
 
-  // update the reconfigure config
-  reconfigure_server_->setConfigMin(config_min_);
-  reconfigure_server_->setConfigMax(config_max_);
-  reconfigure_server_->updateConfig(config_);
-  ros::Duration(2.0).sleep();
-  reconfigure_server_->setCallback(boost::bind(&CameraAravisNodelet::rosReconfigureCallback, this, _1, _2));
-
+void CameraAravisNodelet::printCameraInfo()
+{
   // Print information.
   ROS_INFO("    Using Camera Configuration:");
   ROS_INFO("    ---------------------------");
@@ -724,11 +791,11 @@ void CameraAravisNodelet::onInit()
       "    Type                 = %s",
       arv_camera_is_uv_device(p_camera_) ? "USB3Vision" :
           (arv_camera_is_gv_device(p_camera_) ? "GigEVision" : "Other"));
-  ROS_INFO("    Sensor width         = %d", sensors_[0]->width);
-  ROS_INFO("    Sensor height        = %d", sensors_[0]->height);
+  ROS_INFO("    Sensor width         = %d", sources_[0].sensor.width);
+  ROS_INFO("    Sensor height        = %d", sources_[0].sensor.height);
   ROS_INFO("    ROI x,y,w,h          = %d, %d, %d, %d", roi_.x, roi_.y, roi_.width, roi_.height);
-  ROS_INFO("    Pixel format         = %s", sensors_[0]->pixel_format.c_str());
-  ROS_INFO("    BitsPerPixel         = %lu", sensors_[0]->n_bits_pixel);
+  ROS_INFO("    Pixel format         = %s", sources_[0].sensor.pixel_format.c_str());
+  ROS_INFO("    BitsPerPixel         = %lu", sources_[0].sensor.n_bits_pixel);
   ROS_INFO(
       "    Acquisition Mode     = %s",
       implemented_features_["AcquisitionMode"] ? aravis::device::feature::get_string(p_device_, "AcquisitionMode") :
@@ -768,17 +835,6 @@ void CameraAravisNodelet::onInit()
     ROS_INFO("    Network mtu          = %lu", aravis::device::feature::get_integer(p_device_, "GevSCPSPacketSize"));
 
   ROS_INFO("    ---------------------------");
-
-  // Reset PTP clock
-  if (use_ptp_stamp_)
-    resetPtpClock();
-
-  // spawn camera stream in thread, so onInit() is not blocked
-  spawning_ = true;
-  spawn_stream_thread_ = std::thread(&CameraAravisNodelet::spawnStream, this);
-
-  // enable multipart data
-  aravis::camera::set_multipart_output_format(p_camera_, true);
 }
 
 void CameraAravisNodelet::spawnStream()
@@ -791,20 +847,20 @@ void CameraAravisNodelet::spawnStream()
     while (spawning_) {
       if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_, i);
 
-      p_streams_[i] = aravis::camera::create_stream(p_camera_, NULL, NULL);
+      sources_[i].p_stream = aravis::camera::create_stream(p_camera_, NULL, NULL);
 
-      if (p_streams_[i])
+      if (sources_[i].p_stream)
       {
         // Load up some buffers.
         if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_, i);
 
         const gint n_bytes_payload_stream_ = aravis::camera::get_payload(p_camera_);
 
-        p_buffer_pools_[i].reset(new CameraBufferPool(p_streams_[i], n_bytes_payload_stream_, 10));
+        sources_[i].p_buffer_pool.reset(new CameraBufferPool(sources_[i].p_stream, n_bytes_payload_stream_, 10));
 
         if (arv_camera_is_gv_device(p_camera_))
         {
-          tuneGvStream(reinterpret_cast<ArvGvStream*>(p_streams_[i]));
+          tuneGvStream(reinterpret_cast<ArvGvStream*>(sources_[i].p_stream));
         }
         break;
       }
@@ -831,11 +887,11 @@ void CameraAravisNodelet::spawnStream()
     // Set up image_raw
     std::string topic_name = this->getName();
     p_transport = new image_transport::ImageTransport(pnh);
-    if(num_streams_ != 1 || !stream_names_[i].empty()) {
-      topic_name += "/" + stream_names_[i];
+    if(num_streams_ != 1 || !sources_[i].stream_name.empty()) {
+      topic_name += "/" + sources_[i].stream_name;
     }
 
-    cam_pubs_[i] = p_transport->advertiseCamera(
+    sources_[i].cam_pub = p_transport->advertiseCamera(
       ros::names::remap(topic_name + "/image_raw"),
       1, image_cb, image_cb, info_cb, info_cb);
   }
@@ -845,16 +901,16 @@ void CameraAravisNodelet::spawnStream()
     StreamIdData* data = new StreamIdData();
     data->can = this;
     data->stream_id = i;
-    g_signal_connect(p_streams_[i], "new-buffer", (GCallback)CameraAravisNodelet::newBufferReadyCallback, data);
+    g_signal_connect(sources_[i].p_stream, "new-buffer", (GCallback)CameraAravisNodelet::newBufferReadyCallback, data);
   }
   g_signal_connect(p_device_, "control-lost", (GCallback)CameraAravisNodelet::controlLostCallback, this);
 
   for(int i = 0; i < num_streams_; i++) {
-    arv_stream_set_emit_signals(p_streams_[i], TRUE);
+    arv_stream_set_emit_signals(sources_[i].p_stream, TRUE);
   }
 
-  if (std::any_of(cam_pubs_.begin(), cam_pubs_.end(),
-    [](image_transport::CameraPublisher pub){ return pub.getNumSubscribers() > 0; })
+  if (std::any_of(sources_.begin(), sources_.end(),
+    [](const Source &src){ return src.cam_pub.getNumSubscribers() > 0; })
   ) {
     aravis::camera::start_acquisition(p_camera_);
   }
@@ -1197,17 +1253,19 @@ void CameraAravisNodelet::setAutoSlave(bool value)
 
 void CameraAravisNodelet::setExtendedCameraInfo(std::string channel_name, size_t stream_id)
 {
+  Source &src = sources_[stream_id];
+
   if (pub_ext_camera_info_)
   {
     if (channel_name.empty()) {
-      extended_camera_info_pubs_[stream_id]  = getNodeHandle().advertise<ExtendedCameraInfo>(ros::names::remap("extended_camera_info"), 1, true);
+      src.extended_camera_info_pub = getNodeHandle().advertise<ExtendedCameraInfo>(ros::names::remap("extended_camera_info"), 1, true);
     } else {
-      extended_camera_info_pubs_[stream_id]  = getNodeHandle().advertise<ExtendedCameraInfo>(ros::names::remap(channel_name + "/extended_camera_info"), 1, true);
+      src.extended_camera_info_pub = getNodeHandle().advertise<ExtendedCameraInfo>(ros::names::remap(channel_name + "/extended_camera_info"), 1, true);
     }
   }
   else
   {
-    extended_camera_info_pubs_[stream_id].shutdown();
+    src.extended_camera_info_pub.shutdown();
   }
 }
 
@@ -1480,8 +1538,8 @@ void CameraAravisNodelet::rosConnectCallback()
 {
   if (p_device_)
   {
-    if (std::all_of(cam_pubs_.begin(), cam_pubs_.end(),
-      [](image_transport::CameraPublisher pub){ return pub.getNumSubscribers() == 0; })
+    if (std::all_of(sources_.begin(), sources_.end(),
+      [](const Source &src){ return src.cam_pub.getNumSubscribers() == 0; })
     ){
       aravis::device::execute_command(p_device_, "AcquisitionStop"); // don't waste CPU if nobody is listening!
     }
@@ -1518,17 +1576,17 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, size_t stream_id)
   arv_stream_get_n_buffers(p_stream, &n_available_buffers, NULL);
 
   if (n_available_buffers == 0)
-    p_buffer_pools_[stream_id]->allocateBuffers(1);
+    sources_[stream_id].p_buffer_pool->allocateBuffers(1);
 
   if(p_buffer == nullptr)
     return;
 
   bool buffer_success = arv_buffer_get_status(p_buffer) == ARV_BUFFER_STATUS_SUCCESS;
-  bool buffer_pool = (bool)p_buffer_pools_[stream_id];
-  bool has_subscribers = cam_pubs_[stream_id].getNumSubscribers();
+  bool buffer_pool = (bool)sources_[stream_id].p_buffer_pool;
+  bool has_subscribers = sources_[stream_id].cam_pub.getNumSubscribers();
 
-  const std::string &frame_id = stream_names_[stream_id].empty() ? config_.frame_id :
-                                config_.frame_id + "/" + stream_names_[stream_id];
+  const std::string &frame_id = sources_[stream_id].stream_name.empty() ? config_.frame_id :
+                                config_.frame_id + "/" + sources_[stream_id].stream_name;
 
   if (!buffer_success)
     ROS_WARN("(%s) Frame error: %s", frame_id.c_str(), szBufferStatusFromInt[arv_buffer_get_status(p_buffer)]);
@@ -1562,11 +1620,13 @@ void CameraAravisNodelet::processBuffer(ArvBuffer *p_buffer, size_t stream_id)
 
 void CameraAravisNodelet::processImageBuffer(ArvBuffer *p_buffer, size_t stream_id)
 {
-  const std::string &frame_id = stream_names_[stream_id].empty() ? config_.frame_id :
-                                config_.frame_id + "/" + stream_names_[stream_id];
+  Source & src = sources_[stream_id];
+
+  const std::string &frame_id = src.stream_name.empty() ? config_.frame_id :
+                                config_.frame_id + "/" + src.stream_name;
 
   // get the image message which wraps around this buffer
-  sensor_msgs::ImagePtr msg_ptr = (*(p_buffer_pools_[stream_id]))[p_buffer];
+  sensor_msgs::ImagePtr msg_ptr = (*(src.p_buffer_pool))[p_buffer];
   // fill the meta information of image message
   // get acquisition time
   guint64 t = use_ptp_stamp_ ? arv_buffer_get_timestamp(p_buffer) : arv_buffer_get_system_timestamp(p_buffer);
@@ -1578,23 +1638,23 @@ void CameraAravisNodelet::processImageBuffer(ArvBuffer *p_buffer, size_t stream_
   msg_ptr->header.frame_id = frame_id;
   msg_ptr->width = roi_.width;
   msg_ptr->height = roi_.height;
-  msg_ptr->encoding = sensors_[stream_id]->pixel_format;
-  msg_ptr->step = (msg_ptr->width * sensors_[stream_id]->n_bits_pixel)/8;
+  msg_ptr->encoding = src.sensor.pixel_format;
+  msg_ptr->step = (msg_ptr->width * src.sensor.n_bits_pixel)/8;
 
   // do the magic of conversion into a ROS format
-  if (convert_formats[stream_id]) {
-    sensor_msgs::ImagePtr cvt_msg_ptr = p_buffer_pools_[stream_id]->getRecyclableImg();
-    convert_formats[stream_id](msg_ptr, cvt_msg_ptr);
+  if (src.convert_format) {
+    sensor_msgs::ImagePtr cvt_msg_ptr = src.p_buffer_pool->getRecyclableImg();
+    src.convert_format(msg_ptr, cvt_msg_ptr);
     msg_ptr = cvt_msg_ptr;
   }
 
   // get current CameraInfo data
-  if (!camera_infos_[stream_id]) {
-    camera_infos_[stream_id].reset(new sensor_msgs::CameraInfo);
+  if (!src.camera_info) {
+    src.camera_info.reset(new sensor_msgs::CameraInfo);
   }
-  (*camera_infos_[stream_id]) = p_camera_info_managers_[stream_id]->getCameraInfo();
-  camera_infos_[stream_id]->header = msg_ptr->header;
-  if (camera_infos_[stream_id]->width == 0 || camera_infos_[stream_id]->height == 0) {
+  (*src.camera_info) = src.p_camera_info_manager->getCameraInfo();
+  src.camera_info->header = msg_ptr->header;
+  if (src.camera_info->width == 0 || src.camera_info->height == 0) {
     ROS_WARN_STREAM_ONCE(
         "The fields image_width and image_height seem not to be set in "
         "the YAML specified by 'camera_info_url' parameter. Please set "
@@ -1602,12 +1662,11 @@ void CameraAravisNodelet::processImageBuffer(ArvBuffer *p_buffer, size_t stream_
         "can be different due to the region of interest (ROI) feature. In "
         "the YAML the image size should be the one on which the camera was "
         "calibrated. See CameraInfo.msg specification!");
-    camera_infos_[stream_id]->width = roi_.width;
-    camera_infos_[stream_id]->height = roi_.height;
+    src.camera_info->width = roi_.width;
+    src.camera_info->height = roi_.height;
   }
 
-
-  cam_pubs_[stream_id].publish(msg_ptr, camera_infos_[stream_id]);
+  src.cam_pub.publish(msg_ptr, src.camera_info);
 
   if (pub_ext_camera_info_) {
     ExtendedCameraInfo extended_camera_info_msg;
@@ -1615,10 +1674,10 @@ void CameraAravisNodelet::processImageBuffer(ArvBuffer *p_buffer, size_t stream_
 
     if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_, stream_id);
 
-    extended_camera_info_msg.camera_info = *(camera_infos_[stream_id]);
+    extended_camera_info_msg.camera_info = *(src.camera_info);
     fillExtendedCameraInfoMessage(extended_camera_info_msg);
     extended_camera_info_mutex_.unlock();
-    extended_camera_info_pubs_[stream_id].publish(extended_camera_info_msg);
+    src.extended_camera_info_pub.publish(extended_camera_info_msg);
   }
 
   // check PTP status, camera cannot recover from "Faulty" by itself
@@ -1744,8 +1803,8 @@ void CameraAravisNodelet::softwareTriggerLoop()
   while (ros::ok() && software_trigger_active_)
   {
     next_time += std::chrono::milliseconds(size_t(std::round(1000.0 / config_.softwaretriggerrate)));
-    if (std::any_of(cam_pubs_.begin(), cam_pubs_.end(),
-      [](image_transport::CameraPublisher pub){ return pub.getNumSubscribers() > 0; })
+    if (std::any_of(sources_.begin(), sources_.end(),
+      [](const Source &src){ return src.cam_pub.getNumSubscribers() > 0; })
     )
     {
       aravis::device::execute_command(p_device_, "TriggerSoftware");

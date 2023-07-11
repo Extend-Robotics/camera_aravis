@@ -97,13 +97,60 @@ private:
   ArvDevice *p_device_ = NULL;
 
   gint num_streams_ = 0;
-  std::vector<ArvStream *> p_streams_;
-  std::vector<std::string> stream_names_;
-  std::vector<CameraBufferPool::Ptr> p_buffer_pools_;
+
+  struct Sensor
+  {
+    int32_t width = 0;
+    int32_t height = 0;
+    std::string pixel_format;
+    size_t n_bits_pixel = 0;
+  };
+/*
+  // for multipart/chunked data
+  struct Part
+  {
+    Sensor sensor;
+    std::string part_name;
+    ConversionFunction convert_format;
+
+    image_transport::CameraPublisher cam_pub;
+    std::unique_ptr<camera_info_manager::CameraInfoManager> p_camera_info_manager;
+    std::unique_ptr<ros::NodeHandle> p_camera_info_node_handle;
+    sensor_msgs::CameraInfoPtr camera_info;
+    ros::Publisher extended_camera_info_pub;
+  };
+*/
+  struct Source
+  {
+    Sensor sensor;
+    ArvStream *p_stream;
+    std::string stream_name;
+    CameraBufferPool::Ptr p_buffer_pool;
+    ConversionFunction convert_format;
+
+    image_transport::CameraPublisher cam_pub;
+    std::unique_ptr<camera_info_manager::CameraInfoManager> p_camera_info_manager;
+    std::unique_ptr<ros::NodeHandle> p_camera_info_node_handle;
+    sensor_msgs::CameraInfoPtr camera_info;
+    ros::Publisher extended_camera_info_pub;
+  };
+
+  std::vector<Source> sources_;
+
   int32_t acquire_ = 0;
-  std::vector<ConversionFunction> convert_formats;
 
   virtual void onInit() override;
+  void connectToCamera();
+  void discoverStreams(size_t stream_names_size);
+  std::vector<ConversionFunction> initPixelFormats();
+  void getBounds();
+  void setUSBMode();
+  void setCameraSettings();
+  void readCameraSettings();
+  void publish_tf_optical();
+  void initCalibration();
+  void printCameraInfo();
+
   void spawnStream();
 
 
@@ -192,11 +239,6 @@ protected:
   std::unique_ptr<dynamic_reconfigure::Server<Config> > reconfigure_server_;
   boost::recursive_mutex reconfigure_mutex_;
 
-  std::vector<image_transport::CameraPublisher> cam_pubs_;
-  std::vector<std::unique_ptr<camera_info_manager::CameraInfoManager>> p_camera_info_managers_;
-  std::vector<std::unique_ptr<ros::NodeHandle>> p_camera_info_node_handles_;
-  std::vector<sensor_msgs::CameraInfoPtr> camera_infos_;
-
   std::unique_ptr<tf2_ros::StaticTransformBroadcaster> p_stb_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> p_tb_;
   geometry_msgs::TransformStamped tf_optical_;
@@ -208,7 +250,6 @@ protected:
   ros::Subscriber auto_sub_;
 
   boost::recursive_mutex extended_camera_info_mutex_;
-  std::vector<ros::Publisher> extended_camera_info_pubs_;
 
   Config config_;
   Config config_min_;
@@ -233,16 +274,6 @@ protected:
     int32_t height_min = 0;
     int32_t height_max = 0;
   } roi_;
-
-  struct Sensor
-  {
-    int32_t width = 0;
-    int32_t height = 0;
-    std::string pixel_format;
-    size_t n_bits_pixel = 0;
-  };
-
-  std::vector<Sensor *> sensors_;
 
   struct StreamIdData
   {
