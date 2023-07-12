@@ -106,11 +106,12 @@ private:
     size_t n_bits_pixel = 0;
   };
 /*
-  // for multipart/chunked data
-  struct Part
+  // logically single kind of data (image/image chunk/image in multipart/depth map/...)
+  // a single stream may transfer multiple substreams (multipart/chunked data)
+  struct Substream
   {
     Sensor sensor;
-    std::string part_name;
+    std::string substream_name;
     ConversionFunction convert_format;
 
     image_transport::CameraPublisher cam_pub;
@@ -124,7 +125,7 @@ private:
   {
     Sensor sensor;
     ArvStream *p_stream;
-    std::string stream_name;
+    std::string name;
     CameraBufferPool::Ptr p_buffer_pool;
     ConversionFunction convert_format;
 
