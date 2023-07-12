@@ -120,7 +120,7 @@ private:
     ros::Publisher extended_camera_info_pub;
   };
 */
-  struct Source
+  struct Stream
   {
     Sensor sensor;
     ArvStream *p_stream;
@@ -135,7 +135,7 @@ private:
     ros::Publisher extended_camera_info_pub;
   };
 
-  std::vector<Source> sources_;
+  std::vector<Stream> streams_;
 
   int32_t acquire_ = 0;
 
