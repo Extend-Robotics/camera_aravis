@@ -138,7 +138,7 @@ private:
   virtual void onInit() override;
   void connectToCamera();
   void discoverStreams(size_t stream_names_size);
-  std::vector<ConversionFunction> initPixelFormats();
+  void initPixelFormats();
   void getBounds();
   void setUSBMode();
   void setCameraSettings();
@@ -161,7 +161,7 @@ protected:
   void setAutoMaster(bool value);
   void setAutoSlave(bool value);
 
-  void setExtendedCameraInfo(std::string channel_name, size_t stream_id);
+  void setExtendedCameraInfo(std::string channel_name, size_t stream_id, size_t substream_id);
   void fillExtendedCameraInfoMessage(ExtendedCameraInfo &msg);
 
   // Extra stream options for GigEVision streams.

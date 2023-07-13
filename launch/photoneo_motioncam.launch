@@ -7,7 +7,7 @@
 
   <arg name="sensor_name"              default="aravis_camera"/>
   <arg name="serial_no"                default=""/>
-  <arg name="camera_info_url"          default=""/>
+  <arg name="camera_info_url"          default=","/>
 
   <arg name="channel_names"            default="Intensity,Range"/>
   <arg name="pixel_format"             default="Mono16,Coord3D_C32f"/>
