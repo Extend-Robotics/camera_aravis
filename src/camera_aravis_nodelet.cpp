@@ -1636,19 +1636,23 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, size_t stream_id)
   gint n_available_buffers;
   arv_stream_get_n_buffers(p_stream, &n_available_buffers, NULL);
 
+  Stream & stream = streams_[stream_id];
+
   if (n_available_buffers == 0)
-    streams_[stream_id].p_buffer_pool->allocateBuffers(1);
+    stream.p_buffer_pool->allocateBuffers(1);
 
   if(p_buffer == nullptr)
     return;
 
   bool buffer_success = arv_buffer_get_status(p_buffer) == ARV_BUFFER_STATUS_SUCCESS;
-  bool buffer_pool = (bool)streams_[stream_id].p_buffer_pool;
-  bool has_subscribers = streams_[stream_id].substreams[0].cam_pub.getNumSubscribers();
+  bool buffer_pool = (bool)stream.p_buffer_pool;
+  bool has_subscribers = std::any_of(stream.substreams.begin(), stream.substreams.end(),
+                                     [](const Substream &sub)
+                                       { return sub.cam_pub.getNumSubscribers() > 0; });
 
-  const Substream &sub = streams_[stream_id].substreams[0];
+  const Substream &sub = stream.substreams[0];
   const std::string &frame_id = sub.name.empty() ? config_.frame_id :
-                                config_.frame_id + "/" + sub.name;
+                                config_.frame_id + "/" + sub.name + "(and possibly subframes)";
 
   if (!buffer_success)
     ROS_WARN("(%s) Frame error: %s", frame_id.c_str(), szBufferStatusFromInt[arv_buffer_get_status(p_buffer)]);
@@ -1765,9 +1769,82 @@ void CameraAravisNodelet::processMultipartBuffer(ArvBuffer *p_buffer, size_t str
   {
       size_t dataSize = 0;
       auto data = arv_buffer_get_part_data(p_buffer, i, &dataSize);
-      auto dataType = arv_buffer_get_part_data_type(p_buffer, i);
-      ROS_INFO_STREAM("Part " << i << " size: " << dataSize << " type: " << dataType);
+      processPartBuffer(p_buffer, stream_id, i, data, dataSize);
   }
+}
+
+void CameraAravisNodelet::processPartBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substream_id, const void* data, size_t size)
+{
+  Stream & src = streams_[stream_id];
+  Substream & substream = src.substreams[substream_id];
+  const Sensor & sensor = substream.sensor;
+
+  const std::string &frame_id = substream.name.empty() ? config_.frame_id :
+                                config_.frame_id + "/" + substream.name;
+
+  // get the image message which wraps around this buffer
+  // TODO - create buffer pool dedicated to substream/part!
+  sensor_msgs::ImagePtr msg_ptr = src.p_buffer_pool->getRecyclableImg();
+  // fill the meta information of image message
+  // get acquisition time
+  guint64 t = use_ptp_stamp_ ? arv_buffer_get_timestamp(p_buffer) : arv_buffer_get_system_timestamp(p_buffer);
+
+  msg_ptr->header.stamp.fromNSec(t);
+  // get frame sequence number
+  msg_ptr->header.seq = arv_buffer_get_frame_id(p_buffer);
+  // fill other stream properties
+  msg_ptr->header.frame_id = frame_id;
+  msg_ptr->width = roi_.width;
+  msg_ptr->height = roi_.height;
+  msg_ptr->encoding = sensor.pixel_format;
+  msg_ptr->step = (msg_ptr->width * sensor.n_bits_pixel)/8;
+
+  msg_ptr->data.resize(size);
+  memcpy(msg_ptr->data.data(), data, size);
+
+  // do the magic of conversion into a ROS format
+  if (substream.convert_format) {
+    //TODO use substream/part specific buffer pool
+    sensor_msgs::ImagePtr cvt_msg_ptr = src.p_buffer_pool->getRecyclableImg();
+    substream.convert_format(msg_ptr, cvt_msg_ptr);
+    msg_ptr = cvt_msg_ptr;
+  }
+
+  // get current CameraInfo data
+  if (!substream.camera_info) {
+    substream.camera_info.reset(new sensor_msgs::CameraInfo);
+  }
+  (*substream.camera_info) = substream.p_camera_info_manager->getCameraInfo();
+  substream.camera_info->header = msg_ptr->header;
+  if (substream.camera_info->width == 0 || substream.camera_info->height == 0) {
+    ROS_WARN_STREAM_ONCE(
+        "The fields image_width and image_height seem not to be set in "
+        "the YAML specified by 'camera_info_url' parameter. Please set "
+        "them there, because actual image size and specified image size "
+        "can be different due to the region of interest (ROI) feature. In "
+        "the YAML the image size should be the one on which the camera was "
+        "calibrated. See CameraInfo.msg specification!");
+    substream.camera_info->width = roi_.width;
+    substream.camera_info->height = roi_.height;
+  }
+
+  substream.cam_pub.publish(msg_ptr, substream.camera_info);
+
+  if (pub_ext_camera_info_) {
+    ExtendedCameraInfo extended_camera_info_msg;
+    extended_camera_info_mutex_.lock();
+
+    if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_, stream_id);
+
+    extended_camera_info_msg.camera_info = *(substream.camera_info);
+    fillExtendedCameraInfoMessage(extended_camera_info_msg);
+    extended_camera_info_mutex_.unlock();
+    substream.extended_camera_info_pub.publish(extended_camera_info_msg);
+  }
+
+  // check PTP status, camera cannot recover from "Faulty" by itself
+  if (use_ptp_stamp_)
+    resetPtpClock();
 }
 
 void CameraAravisNodelet::fillExtendedCameraInfoMessage(ExtendedCameraInfo &msg)

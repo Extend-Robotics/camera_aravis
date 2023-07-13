@@ -184,6 +184,7 @@ protected:
   void processImageBuffer(ArvBuffer *p_buffer, size_t stream_id);
   void processChunkDataBuffer(ArvBuffer *p_buffer, size_t stream_id);
   void processMultipartBuffer(ArvBuffer *p_buffer, size_t stream_id);
+  void processPartBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substream_id, const void* data, size_t size);
 
   // Clean-up if aravis device is lost
   static void controlLostCallback(ArvDevice *p_gv_device, gpointer can_instance);
