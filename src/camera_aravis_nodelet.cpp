@@ -1973,7 +1973,7 @@ void CameraAravisNodelet::parseStringArgs(std::string in_arg_string, std::vector
         std::stringstream ss(in_arg_string.substr(array_start, array_end - array_start));
         while (ss.good()) {
           std::string temp;
-          getline( ss, temp, ',');
+          getline( ss, temp, ';');
           boost::trim_left(temp);
           boost::trim_right(temp);
           out_args.push_back(temp);

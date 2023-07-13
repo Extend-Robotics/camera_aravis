@@ -7,10 +7,10 @@
 
   <arg name="sensor_name"              default="aravis_cam"/>
   <arg name="serial_no"                default=""/>
-  <arg name="camera_info_url"          default="file://$(find camera_aravis)/launch/calib_vis.yaml,file://$(find camera_aravis)/launch/calib_nir.yaml"/>
+  <arg name="camera_info_url"          default="file://$(find camera_aravis)/launch/calib_vis.yaml;file://$(find camera_aravis)/launch/calib_nir.yaml"/>
 
-  <arg name="channel_names"            default="vis,nir"/>
-  <arg name="pixel_format"             default="BayerRG8,Mono8"/>
+  <arg name="channel_names"            default="vis;nir"/>
+  <arg name="pixel_format"             default="BayerRG8;Mono8"/>
   <arg name="width"                    default="2048"/>
   <arg name="height"                   default="1536"/>
   <arg name="fps"                      default="10"/>
@@ -52,19 +52,19 @@
     </node>
 
     <!-- Debayer & Undistort both images -->
-    <node ns="$(eval arg('channel_names').split(',')[0])" pkg="nodelet" type="nodelet" name="debayer"
+    <node ns="$(eval arg('channel_names').split(';')[0])" pkg="nodelet" type="nodelet" name="debayer"
           args="load image_proc/debayer $(arg manager)">
       <param name="debayer" value="0"/>
     </node>
 
-    <node ns="$(eval arg('channel_names').split(',')[0])" pkg="nodelet" type="nodelet" name="rectify_color"
+    <node ns="$(eval arg('channel_names').split(';')[0])" pkg="nodelet" type="nodelet" name="rectify_color"
           args="load image_proc/rectify $(arg manager)">
       <param name="interpolation" value="1"/>
       <remap from="image_mono" to="image_color"/>
       <remap from="image_rect" to="image_rect_color"/>
     </node>
 
-    <node ns="$(eval arg('channel_names').split(',')[1])" pkg="nodelet" type="nodelet" name="rectify_mono"
+    <node ns="$(eval arg('channel_names').split(';')[1])" pkg="nodelet" type="nodelet" name="rectify_mono"
           args="load image_proc/rectify $(arg manager)">
       <param name="interpolation" value="1"/>
       <remap from="image_mono" to="image_raw"/>
