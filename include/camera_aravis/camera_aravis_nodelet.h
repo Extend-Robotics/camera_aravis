@@ -124,7 +124,6 @@ private:
   struct Stream
   {
     ArvStream *p_stream;
-    std::string name;
     CameraBufferPool::Ptr p_buffer_pool;
 
     // typical image-like data or multipart/chunk with image-like data

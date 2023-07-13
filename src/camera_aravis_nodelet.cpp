@@ -418,8 +418,8 @@ void CameraAravisNodelet::onInit()
 
   // initialize the sensor structs
   for(int i = 0; i < num_streams_; i++) {
-    streams_.push_back({nullptr, stream_names[i], CameraBufferPool::Ptr() });
-    streams_[i].substreams.push_back({{0}, ""});
+    streams_.push_back({nullptr, CameraBufferPool::Ptr() });
+    streams_[i].substreams.push_back({{0}, stream_names[i]});
   }
 
   std::vector<ConversionFunction> convert_formats = initPixelFormats();
@@ -761,12 +761,12 @@ void CameraAravisNodelet::initCalibration()
     Stream &src = streams_[i];
     Substream &sub = src.substreams[0];
 
-    if(!src.name.empty())
-      camera_info_frame_id = config_.frame_id + '/' + src.name;
+    if(!sub.name.empty())
+      camera_info_frame_id = config_.frame_id + '/' + sub.name;
 
     // Use separate node handles for CameraInfoManagers when using a Multisource Camera
-    if(!src.name.empty()) {
-      sub.p_camera_info_node_handle.reset(new ros::NodeHandle(pnh, src.name));
+    if(!sub.name.empty()) {
+      sub.p_camera_info_node_handle.reset(new ros::NodeHandle(pnh, sub.name));
       sub.p_camera_info_manager.reset(new camera_info_manager::CameraInfoManager(*sub.p_camera_info_node_handle, camera_info_frame_id, calib_urls[i]));
 
     } else {
@@ -774,11 +774,11 @@ void CameraAravisNodelet::initCalibration()
     }
 
 
-    ROS_INFO("Reset %s Camera Info Manager", streams_[i].name.c_str());
-    ROS_INFO("%s Calib URL: %s", streams_[i].name.c_str(), calib_urls[i].c_str());
+    ROS_INFO("Reset %s Camera Info Manager", sub.name.c_str());
+    ROS_INFO("%s Calib URL: %s", sub.name.c_str(), calib_urls[i].c_str());
 
     // publish an ExtendedCameraInfo message
-    setExtendedCameraInfo(streams_[i].name, i);
+    setExtendedCameraInfo(sub.name, i);
   }
 }
 
@@ -890,11 +890,13 @@ void CameraAravisNodelet::spawnStream()
 
   for(int i = 0; i < num_streams_; i++) {
     image_transport::ImageTransport *p_transport;
+    const Substream &sub = streams_[i].substreams[0];
+
     // Set up image_raw
     std::string topic_name = this->getName();
     p_transport = new image_transport::ImageTransport(pnh);
-    if(num_streams_ != 1 || !streams_[i].name.empty()) {
-      topic_name += "/" + streams_[i].name;
+    if(num_streams_ != 1 || !sub.name.empty()) {
+      topic_name += "/" + sub.name;
     }
 
     streams_[i].substreams[0].cam_pub = p_transport->advertiseCamera(
@@ -1613,8 +1615,9 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, size_t stream_id)
   bool buffer_pool = (bool)streams_[stream_id].p_buffer_pool;
   bool has_subscribers = streams_[stream_id].substreams[0].cam_pub.getNumSubscribers();
 
-  const std::string &frame_id = streams_[stream_id].name.empty() ? config_.frame_id :
-                                config_.frame_id + "/" + streams_[stream_id].name;
+  const Substream &sub = streams_[stream_id].substreams[0];
+  const std::string &frame_id = sub.name.empty() ? config_.frame_id :
+                                config_.frame_id + "/" + sub.name;
 
   if (!buffer_success)
     ROS_WARN("(%s) Frame error: %s", frame_id.c_str(), szBufferStatusFromInt[arv_buffer_get_status(p_buffer)]);
@@ -1652,8 +1655,8 @@ void CameraAravisNodelet::processImageBuffer(ArvBuffer *p_buffer, size_t stream_
   Substream & substream = src.substreams[0];
   const Sensor & sensor = substream.sensor;
 
-  const std::string &frame_id = src.name.empty() ? config_.frame_id :
-                                config_.frame_id + "/" + src.name;
+  const std::string &frame_id = substream.name.empty() ? config_.frame_id :
+                                config_.frame_id + "/" + substream.name;
 
   // get the image message which wraps around this buffer
   sensor_msgs::ImagePtr msg_ptr = (*(src.p_buffer_pool))[p_buffer];
