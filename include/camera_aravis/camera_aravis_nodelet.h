@@ -220,7 +220,8 @@ protected:
 
   void discoverFeatures();
 
-  static void parseStringArgs(std::string in_arg_string, std::vector<std::string> &out_args);
+  static void parseStringArgs(std::string in_arg_string, std::vector<std::string> &out_args, char seprator = ';');
+  void parseStringArgs2D(std::string in_arg_string, std::vector<std::vector<std::string>> &out_args) const;
 
   // WriteCameraFeaturesFromRosparam()
   // Read ROS parameters from this node's namespace, and see if each parameter has a similarly named & typed feature in the camera.  Then set the

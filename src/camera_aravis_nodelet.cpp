@@ -403,6 +403,12 @@ void CameraAravisNodelet::onInit()
     stream_names = { "" };
   }
 
+  /*
+  std::vector<std::vector<std::string>> substream_names;
+  parseStringArgs2D(stream_channel_args, substream_names);
+  return;
+  */
+
   connectToCamera();
 
   // Start the dynamic_reconfigure server.
@@ -1968,22 +1974,50 @@ void CameraAravisNodelet::discoverFeatures()
   }
 }
 
-void CameraAravisNodelet::parseStringArgs(std::string in_arg_string, std::vector<std::string> &out_args) {
+void CameraAravisNodelet::parseStringArgs(std::string in_arg_string, std::vector<std::string> &out_args, char separator) {
   size_t array_start = 0;
   size_t array_end = in_arg_string.length();
-  if(array_start != std::string::npos && array_end != std::string::npos) {
-        // parse the string into an array of parameters
-        std::stringstream ss(in_arg_string.substr(array_start, array_end - array_start));
-        while (ss.good()) {
-          std::string temp;
-          getline( ss, temp, ';');
-          boost::trim_left(temp);
-          boost::trim_right(temp);
-          out_args.push_back(temp);
-        }
-  } else {
-    // add just the one argument onto the vector
+
+  if(array_start == std::string::npos || array_end == std::string::npos)
+  { // add just the one argument onto the vector
     out_args.push_back(in_arg_string);
+    return;
+  }
+
+  // parse the string into an array of parameters
+  std::stringstream ss(in_arg_string.substr(array_start, array_end - array_start));
+  while (ss.good()) {
+    std::string temp;
+    getline( ss, temp, separator);
+    boost::trim_left(temp);
+    boost::trim_right(temp);
+    out_args.push_back(temp);
+  }
+}
+
+void CameraAravisNodelet::parseStringArgs2D(std::string in_arg_string, std::vector<std::vector<std::string>> &out_args) const
+{
+  std::vector<std::string> streams;
+
+  parseStringArgs(in_arg_string, streams, ';');
+
+  for(unsigned i=0;i<streams.size();++i)
+  {
+    std::vector<std::string> substreams;
+    parseStringArgs(streams[i], substreams, ',');
+    out_args.push_back(substreams);
+  }
+
+  if(!verbose_)
+    return;
+
+  ROS_INFO_STREAM("parsing: `" << in_arg_string << "`");
+
+  for(int i=0;i<out_args.size();++i)
+  {
+    ROS_INFO_STREAM("STREAM " << i);
+    for(int j=0;j<out_args[i].size();++j)
+      ROS_INFO_STREAM("  SUBSTREAM " << out_args[i][j]);
   }
 }
 
