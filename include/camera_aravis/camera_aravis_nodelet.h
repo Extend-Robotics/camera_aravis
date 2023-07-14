@@ -111,6 +111,8 @@ private:
   {
     Sensor sensor;
     std::string name;
+    //pool for multipart path where images don't map 1:1 to aravis buffers
+    CameraBufferPool::Ptr p_buffer_pool;
     ConversionFunction convert_format;
 
     image_transport::CameraPublisher cam_pub;

@@ -81,6 +81,9 @@ sensor_msgs::ImagePtr CameraBufferPool::operator[](ArvBuffer *buffer)
 
 void CameraBufferPool::allocateBuffers(size_t n)
 {
+  if(!n)
+    return;
+
   std::lock_guard<std::mutex> lock(mutex_);
 
   if (ARV_IS_STREAM(stream_))

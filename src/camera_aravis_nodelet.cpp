@@ -421,7 +421,7 @@ void CameraAravisNodelet::onInit()
   {
     streams_.push_back({nullptr, CameraBufferPool::Ptr() });
     for(int j = 0; j < substream_names[i].size();++j)
-      streams_[i].substreams.push_back({{0}, substream_names[i][j]});
+      streams_[i].substreams.push_back({{0}, substream_names[i][j], CameraBufferPool::Ptr()});
   }
 
   initPixelFormats();
@@ -879,22 +879,27 @@ void CameraAravisNodelet::spawnStream()
 
   for(int i = 0; i < num_streams_; i++) {
     while (spawning_) {
+      Stream &stream = streams_[i];
+
       if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_, i);
 
-      streams_[i].p_stream = aravis::camera::create_stream(p_camera_, NULL, NULL);
-
-      if (streams_[i].p_stream)
+      stream.p_stream = aravis::camera::create_stream(p_camera_, NULL, NULL);
+      if (stream.p_stream)
       {
         // Load up some buffers.
         if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_, i);
 
         const gint n_bytes_payload_stream_ = aravis::camera::get_payload(p_camera_);
 
-        streams_[i].p_buffer_pool.reset(new CameraBufferPool(streams_[i].p_stream, n_bytes_payload_stream_, 10));
+        stream.p_buffer_pool.reset(new CameraBufferPool(stream.p_stream, n_bytes_payload_stream_, 10));
+
+        //create non-aravis buffer pools for multipart part part images recycling
+        for(int j=0;j<stream.substreams.size();++j)
+          stream.substreams[j].p_buffer_pool.reset(new CameraBufferPool(nullptr, 0, 0));
 
         if (arv_camera_is_gv_device(p_camera_))
         {
-          tuneGvStream(reinterpret_cast<ArvGvStream*>(streams_[i].p_stream));
+          tuneGvStream(reinterpret_cast<ArvGvStream*>(stream.p_stream));
         }
         break;
       }
@@ -1792,9 +1797,9 @@ void CameraAravisNodelet::processPartBuffer(ArvBuffer *p_buffer, size_t stream_i
   const std::string &frame_id = substream.name.empty() ? config_.frame_id :
                                 config_.frame_id + "/" + substream.name;
 
-  // get the image message which wraps around this buffer
-  // TODO - create buffer pool dedicated to substream/part!
-  sensor_msgs::ImagePtr msg_ptr = src.p_buffer_pool->getRecyclableImg();
+  // in multipart path, we can't map 1:1 aravis image with ROS image data
+  // but we keep extra buffer pool on substream (part level)
+  sensor_msgs::ImagePtr msg_ptr = substream.p_buffer_pool->getRecyclableImg();
   // fill the meta information of image message
   // get acquisition time
   guint64 t = use_ptp_stamp_ ? arv_buffer_get_timestamp(p_buffer) : arv_buffer_get_system_timestamp(p_buffer);
@@ -1814,8 +1819,9 @@ void CameraAravisNodelet::processPartBuffer(ArvBuffer *p_buffer, size_t stream_i
 
   // do the magic of conversion into a ROS format
   if (substream.convert_format) {
-    //TODO use substream/part specific buffer pool
-    sensor_msgs::ImagePtr cvt_msg_ptr = src.p_buffer_pool->getRecyclableImg();
+    //we might consider making it a separate pool
+    //as the image size here may differ
+    sensor_msgs::ImagePtr cvt_msg_ptr = substream.p_buffer_pool->getRecyclableImg();
     substream.convert_format(msg_ptr, cvt_msg_ptr);
     msg_ptr = cvt_msg_ptr;
   }
