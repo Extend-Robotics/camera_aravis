@@ -414,10 +414,10 @@ void CameraAravisNodelet::onInit()
   // See which features exist in this camera device
   discoverFeatures();
 
-  discoverStreams(substream_names.size());
+  int num_streams = discoverStreams(substream_names.size());
 
   // initialize the sensor structs
-  for(int i = 0; i < num_streams_; i++)
+  for(int i = 0; i < num_streams; i++)
   {
     streams_.push_back({nullptr, CameraBufferPool::Ptr() });
     for(int j = 0; j < substream_names[i].size();++j)
@@ -502,25 +502,27 @@ void CameraAravisNodelet::connectToCamera()
   aravis::device::feature::get_string(p_device_, "DeviceSerialNumber"));
 }
 
-void CameraAravisNodelet::discoverStreams(size_t stream_names_size)
+int CameraAravisNodelet::discoverStreams(size_t stream_names_size)
 {
   // Check the number of streams for this camera
-  num_streams_ = arv_device_get_integer_feature_value(p_device_, "DeviceStreamChannelCount", nullptr);
+  int num_streams = arv_device_get_integer_feature_value(p_device_, "DeviceStreamChannelCount", nullptr);
   // if this return 0, try the deprecated GevStreamChannelCount in case this is an older camera
-  if (!num_streams_ && arv_camera_is_gv_device(p_camera_)) {
-    num_streams_ = arv_device_get_integer_feature_value(p_device_, "GevStreamChannelCount", nullptr);
+  if (!num_streams && arv_camera_is_gv_device(p_camera_)) {
+    num_streams = arv_device_get_integer_feature_value(p_device_, "GevStreamChannelCount", nullptr);
   }
   // if this also returns 0, assume number of streams = 1
-  if (!num_streams_) {
+  if (!num_streams) {
     ROS_WARN("Unable to detect number of supported stream channels, assuming 1 ...");
-    num_streams_ = 1;
+    num_streams = 1;
   }
 
-  ROS_INFO("Number of supported stream channels %i.", (int) num_streams_);
+  ROS_INFO("Number of supported stream channels %i.", (int) num_streams);
 
   // check if every stream channel has been given a channel name
-  if (stream_names_size < num_streams_)
-    num_streams_ = stream_names_size;
+  if (stream_names_size < num_streams)
+    num_streams = stream_names_size;
+
+  return num_streams;
 }
 
 void CameraAravisNodelet::initPixelFormats()
@@ -532,7 +534,7 @@ void CameraAravisNodelet::initPixelFormats()
   parseStringArgs2D(pixel_format_args, pixel_formats);
 
   // get pixel format name and translate into corresponding ROS name
-  for(int i = 0; i < num_streams_; i++) {
+  for(int i = 0; i < streams_.size(); i++) {
     if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_,i);
 
     std::string source_selector = "Source" + std::to_string(i);
@@ -581,7 +583,7 @@ void CameraAravisNodelet::getBounds()
 
   aravis::camera::bounds::get_gain(p_camera_, &config_min_.Gain, &config_max_.Gain);
 
-  for(int i = 0; i < num_streams_; i++) {
+  for(int i = 0; i < streams_.size(); i++) {
     if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_,i);
 
     for(int j = 0; j < streams_[i].substreams.size(); ++j)
@@ -643,7 +645,7 @@ void CameraAravisNodelet::setUSBMode()
 
 void CameraAravisNodelet::setCameraSettings()
 {
-  for(int i = 0; i < num_streams_; i++) {
+  for(int i = 0; i < streams_.size(); i++) {
     if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_, i);
 
     // Initial camera settings.
@@ -768,7 +770,7 @@ void CameraAravisNodelet::initCalibration()
     }
   }
 
-  for(int i = 0; i < num_streams_; i++) {
+  for(int i = 0; i < streams_.size(); i++) {
     // Start the camerainfo manager.
     std::string camera_info_frame_id = config_.frame_id;
     Stream &src = streams_[i];
@@ -877,7 +879,7 @@ void CameraAravisNodelet::spawnStream()
   ros::NodeHandle pnh = getPrivateNodeHandle();
   GuardedGError error;
 
-  for(int i = 0; i < num_streams_; i++) {
+  for(int i = 0; i < streams_.size(); i++) {
     while (spawning_) {
       Stream &stream = streams_[i];
 
@@ -921,7 +923,7 @@ void CameraAravisNodelet::spawnStream()
   ros::SubscriberStatusCallback info_cb = [this](const ros::SingleSubscriberPublisher &ssp)
   { this->rosConnectCallback();};
 
-  for(int i = 0; i < num_streams_; i++) {
+  for(int i = 0; i < streams_.size(); i++) {
     for(int j= 0; j < streams_[i].substreams.size(); ++j)
     {
       image_transport::ImageTransport *p_transport;
@@ -930,7 +932,7 @@ void CameraAravisNodelet::spawnStream()
       // Set up image_raw
       std::string topic_name = this->getName();
       p_transport = new image_transport::ImageTransport(pnh);
-      if(num_streams_ != 1 || streams_[i].substreams.size() != 1 || !sub.name.empty()) {
+      if(streams_.size() != 1 || streams_[i].substreams.size() != 1 || !sub.name.empty()) {
         topic_name += "/" + sub.name;
       }
 
@@ -941,7 +943,7 @@ void CameraAravisNodelet::spawnStream()
   }
 
   // Connect signals with callbacks.
-  for(int i = 0; i < num_streams_; i++) {
+  for(int i = 0; i < streams_.size(); i++) {
     StreamIdData* data = new StreamIdData();
     data->can = this;
     data->stream_id = i;
@@ -949,7 +951,7 @@ void CameraAravisNodelet::spawnStream()
   }
   g_signal_connect(p_device_, "control-lost", (GCallback)CameraAravisNodelet::controlLostCallback, this);
 
-  for(int i = 0; i < num_streams_; i++) {
+  for(int i = 0; i < streams_.size(); i++) {
     arv_stream_set_emit_signals(streams_[i].p_stream, TRUE);
   }
 

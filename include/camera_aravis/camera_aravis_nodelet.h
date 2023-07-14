@@ -96,8 +96,6 @@ private:
   ArvCamera *p_camera_ = NULL;
   ArvDevice *p_device_ = NULL;
 
-  gint num_streams_ = 0;
-
   struct Sensor
   {
     int32_t width = 0;
@@ -139,7 +137,7 @@ private:
 
   virtual void onInit() override;
   void connectToCamera();
-  void discoverStreams(size_t stream_names_size);
+  int discoverStreams(size_t stream_names_size);
   void initPixelFormats();
   void getBounds();
   void setUSBMode();
