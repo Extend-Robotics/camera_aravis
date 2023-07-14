@@ -96,14 +96,57 @@ private:
   ArvCamera *p_camera_ = NULL;
   ArvDevice *p_device_ = NULL;
 
-  gint num_streams_ = 0;
-  std::vector<ArvStream *> p_streams_;
-  std::vector<std::string> stream_names_;
-  std::vector<CameraBufferPool::Ptr> p_buffer_pools_;
+  struct Sensor
+  {
+    int32_t width = 0;
+    int32_t height = 0;
+    std::string pixel_format;
+    size_t n_bits_pixel = 0;
+  };
+
+  // logically single kind of data (image/image chunk/image in multipart/depth map/...)
+  struct Substream
+  {
+    Sensor sensor;
+    std::string name;
+    //pool for multipart path where images don't map 1:1 to aravis buffers
+    CameraBufferPool::Ptr p_buffer_pool;
+    ConversionFunction convert_format;
+
+    image_transport::CameraPublisher cam_pub;
+    std::unique_ptr<camera_info_manager::CameraInfoManager> p_camera_info_manager;
+    std::unique_ptr<ros::NodeHandle> p_camera_info_node_handle;
+    sensor_msgs::CameraInfoPtr camera_info;
+    ros::Publisher extended_camera_info_pub;
+  };
+
+  // a single stream may transfer multiple substreams (multipart/chunked data)
+  struct Stream
+  {
+    ArvStream *p_stream;
+    CameraBufferPool::Ptr p_buffer_pool;
+
+    // typical image-like data or multipart/chunk with image-like data
+    // each stream has at least 1 substream
+    std::vector<Substream> substreams;
+  };
+
+  std::vector<Stream> streams_;
+
   int32_t acquire_ = 0;
-  std::vector<ConversionFunction> convert_formats;
 
   virtual void onInit() override;
+  void connectToCamera();
+  int discoverStreams(size_t stream_names_size);
+  void initPixelFormats();
+  void getBounds();
+  void setUSBMode();
+  void setCameraSettings();
+  void readCameraSettings();
+  void publish_tf_optical();
+  void initCalibration();
+  void printCameraInfo();
+
   void spawnStream();
 
 
@@ -118,7 +161,7 @@ protected:
   void setAutoMaster(bool value);
   void setAutoSlave(bool value);
 
-  void setExtendedCameraInfo(std::string channel_name, size_t stream_id);
+  void setExtendedCameraInfo(std::string channel_name, size_t stream_id, size_t substream_id);
   void fillExtendedCameraInfoMessage(ExtendedCameraInfo &msg);
 
   // Extra stream options for GigEVision streams.
@@ -133,7 +176,19 @@ protected:
   static void newBufferReadyCallback(ArvStream *p_stream, gpointer can_instance);
 
   // Buffer Callback Helper
-  static void newBufferReady(ArvStream *p_stream, CameraAravisNodelet *p_can, std::string frame_id, size_t stream_id);
+  void newBufferReady(ArvStream *p_stream, size_t stream_id);
+
+  // Process Validated Buffer
+  void processBuffer(ArvBuffer *p_buffer, size_t stream_id);
+
+  void processImageBuffer(ArvBuffer *p_buffer, size_t stream_id);
+  void processChunkDataBuffer(ArvBuffer *p_buffer, size_t stream_id);
+  void processMultipartBuffer(ArvBuffer *p_buffer, size_t stream_id);
+  void processPartBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substream_id, const void* data, size_t size);
+
+  void fillImage(const sensor_msgs::ImagePtr &msg_ptr, ArvBuffer *p_buffer, const std::string frame_id, const Sensor& sensor);
+  void fillCameraInfo(Substream &substream, const std_msgs::Header &header);
+  void publishExtendedCameraInfo(const Substream &substream,  size_t stream_id);
 
   // Clean-up if aravis device is lost
   static void controlLostCallback(ArvDevice *p_gv_device, gpointer can_instance);
@@ -170,7 +225,8 @@ protected:
 
   void discoverFeatures();
 
-  static void parseStringArgs(std::string in_arg_string, std::vector<std::string> &out_args);
+  static void parseStringArgs(std::string in_arg_string, std::vector<std::string> &out_args, char seprator = ';');
+  static void parseStringArgs2D(std::string in_arg_string, std::vector<std::vector<std::string>> &out_args);
 
   // WriteCameraFeaturesFromRosparam()
   // Read ROS parameters from this node's namespace, and see if each parameter has a similarly named & typed feature in the camera.  Then set the
@@ -185,11 +241,6 @@ protected:
   std::unique_ptr<dynamic_reconfigure::Server<Config> > reconfigure_server_;
   boost::recursive_mutex reconfigure_mutex_;
 
-  std::vector<image_transport::CameraPublisher> cam_pubs_;
-  std::vector<std::unique_ptr<camera_info_manager::CameraInfoManager>> p_camera_info_managers_;
-  std::vector<std::unique_ptr<ros::NodeHandle>> p_camera_info_node_handles_;
-  std::vector<sensor_msgs::CameraInfoPtr> camera_infos_;
-
   std::unique_ptr<tf2_ros::StaticTransformBroadcaster> p_stb_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> p_tb_;
   geometry_msgs::TransformStamped tf_optical_;
@@ -201,7 +252,6 @@ protected:
   ros::Subscriber auto_sub_;
 
   boost::recursive_mutex extended_camera_info_mutex_;
-  std::vector<ros::Publisher> extended_camera_info_pubs_;
 
   Config config_;
   Config config_min_;
@@ -212,7 +262,6 @@ protected:
 
   std::thread software_trigger_thread_;
   std::atomic_bool software_trigger_active_;
-  size_t n_buffers_ = 0;
 
   std::unordered_map<std::string, const bool> implemented_features_;
 
@@ -227,16 +276,6 @@ protected:
     int32_t height_min = 0;
     int32_t height_max = 0;
   } roi_;
-
-  struct Sensor
-  {
-    int32_t width = 0;
-    int32_t height = 0;
-    std::string pixel_format;
-    size_t n_bits_pixel = 0;
-  };
-
-  std::vector<Sensor *> sensors_;
 
   struct StreamIdData
   {

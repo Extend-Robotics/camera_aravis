@@ -93,6 +93,7 @@ const std::map<std::string, ConversionFunction> CONVERSIONS_DICTIONARY =
  { "Data32s", std::bind(&renameImg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::TYPE_32SC1) },
  { "Data32f", std::bind(&renameImg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::TYPE_32FC1) },
  { "Confidence32f", std::bind(&renameImg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::TYPE_32FC1) },
+ { "Coord3D_C32f", std::bind(&renameImg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::TYPE_32FC1) },
  { "Data64f", std::bind(&renameImg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::TYPE_64FC1) },
  // unthrifty formats. Shift away padding Bits for use with ROS.
  { "Mono10", std::bind(&shiftImg, std::placeholders::_1, std::placeholders::_2, 6, sensor_msgs::image_encodings::MONO16) },

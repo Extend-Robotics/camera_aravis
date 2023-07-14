@@ -8,7 +8,7 @@ The camera_aravis driver has long history of multiple forks and now abandoned Gi
 
 ------------------------
 
-Tested with Aravis version 0.8.X. Since it has changed the API, specially the error handling.
+Tested with Aravis version 0.8.25, requires >= 0.8.23 for multipart data handling.
 
 The basic command to run camera_aravis:
 
@@ -80,6 +80,16 @@ To specify which camera to open, via a parameter:
 	$ rosparam set /camera_aravis/guid Basler-21237813
 	$ rosrun camera_aravis cam_aravis
 
+-------------------------
+
+camera_aravis supports multisource cameras and multipart data
+
+use `channel_name`, `pixel_format` and `camera_info_url` to specify multisource/multipart camera
+- `;` seperates multi-source channels
+- `,` separates multipart parts
+- even if you don't specify `camera_info_urls` keep the correct structure, e.g. `","`
+- for example multisource see `multisource_camera_aravis.launch`
+- for example multipart see `photoneo_motioncam.launch`
 
 ------------------------
 It supports the dynamic_reconfigure protocol, and once the node is running, you may adjust
