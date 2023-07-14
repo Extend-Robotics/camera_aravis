@@ -186,6 +186,10 @@ protected:
   void processMultipartBuffer(ArvBuffer *p_buffer, size_t stream_id);
   void processPartBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substream_id, const void* data, size_t size);
 
+  void fillImage(const sensor_msgs::ImagePtr &msg_ptr, ArvBuffer *p_buffer, const std::string frame_id, const Sensor& sensor);
+  void fillCameraInfo(Substream &substream, const std_msgs::Header &header);
+  void publishExtendedCameraInfo(const Substream &substream,  size_t stream_id);
+
   // Clean-up if aravis device is lost
   static void controlLostCallback(ArvDevice *p_gv_device, gpointer can_instance);
 
