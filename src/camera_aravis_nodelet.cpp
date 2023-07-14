@@ -426,6 +426,15 @@ void CameraAravisNodelet::onInit()
 
   initPixelFormats();
 
+  // set automatic rosparam features before bounds checking
+  // as some settings have side effects on sensor size/ROI
+  for(int i = 0; i < streams_.size(); i++)
+  {
+    if (arv_camera_is_gv_device(p_camera_))
+      aravis::camera::gv::select_stream_channel(p_camera_, i);
+    writeCameraFeaturesFromRosparam();
+  }
+
   getBounds();
 
   setUSBMode();
@@ -684,9 +693,6 @@ void CameraAravisNodelet::setCameraSettings()
       aravis::device::feature::set_string(p_device_, "TriggerSelector", "FrameStart");
       aravis::device::feature::set_string(p_device_, "TriggerMode", "Off");
     }
-
-    // possibly set or override from given parameter
-    writeCameraFeaturesFromRosparam();
   }
 }
 
