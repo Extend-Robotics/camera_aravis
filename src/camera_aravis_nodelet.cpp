@@ -2130,7 +2130,7 @@ void CameraAravisNodelet::parseStringArgs(std::string in_arg_string, std::vector
   }
 }
 
-void CameraAravisNodelet::parseStringArgs2D(std::string in_arg_string, std::vector<std::vector<std::string>> &out_args) const
+void CameraAravisNodelet::parseStringArgs2D(std::string in_arg_string, std::vector<std::vector<std::string>> &out_args)
 {
   std::vector<std::string> streams;
 
@@ -2141,18 +2141,6 @@ void CameraAravisNodelet::parseStringArgs2D(std::string in_arg_string, std::vect
     std::vector<std::string> substreams;
     parseStringArgs(streams[i], substreams, ',');
     out_args.push_back(substreams);
-  }
-
-  if(!verbose_)
-    return;
-
-  ROS_INFO_STREAM("parsing: `" << in_arg_string << "`");
-
-  for(int i=0;i<out_args.size();++i)
-  {
-    ROS_INFO_STREAM("STREAM " << i);
-    for(int j=0;j<out_args[i].size();++j)
-      ROS_INFO_STREAM("  SUBSTREAM " << out_args[i][j]);
   }
 }
 
