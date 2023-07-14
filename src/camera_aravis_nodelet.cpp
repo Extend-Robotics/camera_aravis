@@ -530,7 +530,7 @@ void CameraAravisNodelet::initPixelFormats()
   ros::NodeHandle pnh = getPrivateNodeHandle();
   std::string pixel_format_args;
   std::vector<std::vector<std::string>> pixel_formats;
-  pnh.param("PixelFormat", pixel_format_args, pixel_format_args);
+  pnh.param("pixel_format", pixel_format_args, pixel_format_args);
   parseStringArgs2D(pixel_format_args, pixel_formats);
 
   // get pixel format name and translate into corresponding ROS name

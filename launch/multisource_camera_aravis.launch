@@ -35,9 +35,9 @@
 
       <param name="publish_tf"           value="true"/>
       <param name="tf_publish_rate"      value="$(arg fps)"/>
+      <param name="pixel_format"          value="$(arg pixel_format)"/>
 
       <!-- use GenICam SFNC names as stream control parameters -->
-      <param name="PixelFormat"          value="$(arg pixel_format)"/>
       <param name="Width"                value="$(arg width)"/>
       <param name="Height"               value="$(arg height)"/>
       <param name="AcquisitionFrameRate" type="double" value="$(arg fps)"/>
