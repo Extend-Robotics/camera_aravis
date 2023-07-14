@@ -1680,6 +1680,7 @@ void CameraAravisNodelet::processBuffer(ArvBuffer *p_buffer, size_t stream_id)
     case ARV_BUFFER_PAYLOAD_TYPE_MULTIPART:
         return processMultipartBuffer(p_buffer, stream_id);
     default:
+        arv_stream_push_buffer(streams_[stream_id].p_stream, p_buffer);
         ROS_ERROR("Ignoring unsupported buffer type: %d", payloadType);
   }
 }
@@ -1756,14 +1757,17 @@ void CameraAravisNodelet::processImageBuffer(ArvBuffer *p_buffer, size_t stream_
 void CameraAravisNodelet::processChunkDataBuffer(ArvBuffer *p_buffer, size_t stream_id)
 {
   ROS_ERROR("Ignoring chunk data buffer - NOT IMPLEMENTED");
+
+  //we are done with chunk data buffer
+  //we need to handover buffer to aravis
+  //this is different from Image workflow
+  //where we 1:1 wrap image data with ROS Image
+  arv_stream_push_buffer(streams_[stream_id].p_stream, p_buffer);
 }
 
 void CameraAravisNodelet::processMultipartBuffer(ArvBuffer *p_buffer, size_t stream_id)
 {
-  ROS_ERROR("Ignoring multipart buffer - NOT IMPLEMENTED");
-
   guint nparts = arv_buffer_get_n_parts(p_buffer);
-  ROS_INFO("MULTIPART buffer:");
 
   for(guint i = 0; i < nparts; ++i)
   {
@@ -1771,6 +1775,12 @@ void CameraAravisNodelet::processMultipartBuffer(ArvBuffer *p_buffer, size_t str
       auto data = arv_buffer_get_part_data(p_buffer, i, &dataSize);
       processPartBuffer(p_buffer, stream_id, i, data, dataSize);
   }
+
+  //we are done with multipart buffer
+  //we need to handover buffer to aravis
+  //this is different from Image workflow
+  //where we 1:1 wrap image data with ROS Image
+  arv_stream_push_buffer(streams_[stream_id].p_stream, p_buffer);
 }
 
 void CameraAravisNodelet::processPartBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substream_id, const void* data, size_t size)
