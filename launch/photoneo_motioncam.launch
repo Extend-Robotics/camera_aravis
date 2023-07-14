@@ -51,7 +51,7 @@
       <param name="ExposureAuto"         value="Continuous"/>
       <param name="GainAuto"             value="Continuous"/>
       <param name="BalanceWhiteAuto"     value="Continuous"/>
-
+      <param name="OutputTopology"       value="RegularGrid"/>
     </node>
 
   </group>
