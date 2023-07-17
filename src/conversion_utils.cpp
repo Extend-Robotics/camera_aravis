@@ -426,34 +426,38 @@ void unpack565pImg(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const 
   out->encoding = out_format;
 }
 
-// Pixel depth of B, G, R, and Y channels. Chromatic channels Co and Cg have an additional bit.
-const int pixelDepth = 10;
-using ChannelType = std::uint16_t;
-using YCoCgType = ChannelType;
+namespace photoneo
+{
+  // Pixel depth of B, G, R, and Y channels. Chromatic channels Co and Cg have an additional bit.
+  const int PIXEL_DEPTH = 10;
 
-using RGBChannelType = std::uint8_t;
-using RGBType = cv::Vec<RGBChannelType, 3>;
+  using ChannelType = std::uint16_t;
+  using YCoCgType = ChannelType;
+  using RGBType = cv::Vec<std::uint8_t, 3>;
 
-static RGBType photoneoYCoCgPixelRGB(const ChannelType y, const ChannelType co, const ChannelType cg) {
-    if (y == ChannelType(0)) {
-        return {0, 0, 0};
-    }
-    const ChannelType delta = (1 << (pixelDepth - 1)); // 2^9
-    const ChannelType maxValue = 2 * delta - 1; //2^10 - 1 = 1023
-    ChannelType r1 = 2 * y + co;
-    ChannelType r = r1 > cg ? (r1 - cg) / 2 : ChannelType(0);
-    ChannelType g1 = y + cg / 2;
-    ChannelType g = g1 > delta ? (g1 - delta) : ChannelType(0);
-    ChannelType b1 = y + 2 * delta;
-    ChannelType b2 = (co + cg) / 2;
-    ChannelType b = b1 > b2 ? (b1 - b2) : ChannelType(0);
+  static RGBType photoneoYCoCgPixelRGB(const ChannelType y, const ChannelType co, const ChannelType cg)
+  {
+      if (y == ChannelType(0))
+          return {0, 0, 0};
 
-    return {(uint8_t)(std::min(r, maxValue) / 4), (uint8_t)(std::min(g, maxValue) / 4), (uint8_t)(std::min(b, maxValue) / 4)};
-}
+      const ChannelType delta = (1 << (PIXEL_DEPTH - 1)); // 2^9
+      const ChannelType maxValue = 2 * delta - 1; //2^10 - 1 = 1023
+      ChannelType r1 = 2 * y + co;
+      ChannelType r = r1 > cg ? (r1 - cg) / 2 : ChannelType(0);
+      ChannelType g1 = y + cg / 2;
+      ChannelType g = g1 > delta ? (g1 - delta) : ChannelType(0);
+      ChannelType b1 = y + 2 * delta;
+      ChannelType b2 = (co + cg) / 2;
+      ChannelType b = b1 > b2 ? (b1 - b2) : ChannelType(0);
+
+      return {(uint8_t)(std::min(r, maxValue) / 4), (uint8_t)(std::min(g, maxValue) / 4), (uint8_t)(std::min(b, maxValue) / 4)};
+  }
+
+} //namespace photoneo
 
 /**
  * Provides conversion
- *     BGR  <--> YCoCg 4:2:0,
+ *     BGR  <-- YCoCg 4:2:0,
  * where the chromatic channels Co, Cg are subsampled in half resolution.
  * The 2x2 plaquette of the YCoCg format consists of:
  *   (0, 0): Y (10 bits), 1st half of Co (6 bits)
@@ -468,13 +472,19 @@ static RGBType photoneoYCoCgPixelRGB(const ChannelType y, const ChannelType co, 
  *        - an offset equal to the saturation value, which is added to Co and Cg to prevent negative values.
  *
  * @see https://en.wikipedia.org/wiki/YCoCg
+ * @see https://github.com/photoneo-3d/photoneo-cpp-examples/blob/main/GigEV/aravis/common/YCoCg.h
  */
-
 void photoneoYCoCg420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format)
 {
   if (!in)
   {
     ROS_WARN("camera_aravis::photoneoMotionCamYCoCg(): no input image given.");
+    return;
+  }
+
+  if (in->encoding != "Mono16")
+  {
+    ROS_WARN("camera_aravis::photoneoMotionCamYCoCg(): expecs Mono16 encoded custom YCoCg 4:2:0 subsampled data.");
     return;
   }
 
@@ -491,7 +501,9 @@ void photoneoYCoCg420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, con
   out->step = (3*in->step/2);
   out->data.resize((3*in->data.size()/2));
 
-  const int yShift = std::numeric_limits<ChannelType>::digits - pixelDepth; //16 - 10 = 6
+  using namespace photoneo;
+
+  const int yShift = std::numeric_limits<ChannelType>::digits - PIXEL_DEPTH; //16 - 10 = 6
   const ChannelType mask = static_cast<ChannelType>((1 << yShift) - 1); //low order 6 bits
 
   in->encoding = sensor_msgs::image_encodings::MONO16;

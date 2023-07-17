@@ -43,7 +43,7 @@
     <!-- use GenICam SFNC names as stream control parameters -->
     <param name="Width"                value="$(arg width)"/>
     <param name="Height"               value="$(arg height)"/>
-    <param name="AcquisitionFrameRate" type="double" value="$(arg fps)"/>
+    <param name="AcquisitionFrameRate" value="$(arg fps)" type="double"/>
 
     <param name="Gamma"                value="1.0"/>
     <param name="Gain"                 value="0.0"/>
@@ -54,6 +54,9 @@
 
     <!-- Needed for higher resolution -->
     <param name="OutputTopology"       value="RegularGrid"/>
+
+    <param name="ColorSettings_ISO"    value="200" type="int"/>
+
   </node>
 
 </launch>
