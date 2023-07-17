@@ -1850,8 +1850,6 @@ void CameraAravisNodelet::processPartBuffer(ArvBuffer *p_buffer, size_t stream_i
 
   // do the magic of conversion into a ROS format
   if (substream.convert_format) {
-    //we might consider making it a separate pool
-    //as the image size here may differ
     sensor_msgs::ImagePtr cvt_msg_ptr = substream.p_buffer_pool->getRecyclableImg();
     substream.convert_format(msg_ptr, cvt_msg_ptr);
     msg_ptr = cvt_msg_ptr;
