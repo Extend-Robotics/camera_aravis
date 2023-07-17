@@ -487,7 +487,7 @@ void photoneoYCoCg420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, con
 
   if (in->encoding != "Mono16")
   {
-    ROS_WARN("camera_aravis::photoneoMotionCamYCoCg(): expecs Mono16 encoded custom YCoCg 4:2:0 subsampled data.");
+    ROS_WARN("camera_aravis::photoneoMotionCamYCoCg(): expects Mono16 encoded custom YCoCg 4:2:0 subsampled data.");
     return;
   }
 
