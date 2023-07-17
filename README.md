@@ -8,7 +8,7 @@ The camera_aravis driver has long history of multiple forks and now abandoned Gi
 
 ------------------------
 
-Tested with Aravis version 0.8.25, requires >= 0.8.23 for multipart data handling.
+Tested with Aravis version 0.8.27, requires >= 0.8.25 for multipart data handling.
 
 The basic command to run camera_aravis:
 
@@ -88,10 +88,29 @@ use `channel_name`, `pixel_format` and `camera_info_url` to specify multisource/
 - `;` seperates multi-source channels
 - `,` separates multipart parts
 - even if you don't specify `camera_info_urls` keep the correct structure, e.g. `","`
+- for multipart scenario the order of components should match order the device sends them in
+  - typically ordered by `ComponentIDValue`
 - for example multisource see `multisource_camera_aravis.launch`
 - for example multipart see `photoneo_motioncam.launch`
 
 ------------------------
+
+Parameter `pixel_format_internal` overrides pixel format used internally in `camera_aravis`.
+
+You may use it to implement device quirks like custom device pixel formats that are sent under different
+GenICam/GiGE-Vision pixel format.
+
+The `pixel_format_internal` works also with multisource and multipart devices
+- `;` seperates multi-source channels
+- `,` separates multipart components
+- you may specify partial overrides
+  - e.g. `"PhotoneoYCoCg420,"` means
+    - ovveride first component with `PhotoneoYCoCg420` pixel format
+    - keep the second component as is
+- for example multipart pixel format overriding see `photoneo_motioncam.launch`
+
+--------------------------
+
 It supports the dynamic_reconfigure protocol, and once the node is running, you may adjust
 its parameters by running the following and then manipulating the GUI:
 
