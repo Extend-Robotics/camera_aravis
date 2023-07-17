@@ -138,6 +138,7 @@ private:
   virtual void onInit() override;
   void connectToCamera();
   int discoverStreams(size_t stream_names_size);
+  void disableComponents();
   void initPixelFormats();
   void getBounds();
   void setUSBMode();
@@ -148,7 +149,6 @@ private:
   void printCameraInfo();
 
   void spawnStream();
-
 
 protected:
   // reset PTP clock

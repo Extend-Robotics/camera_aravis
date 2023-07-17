@@ -278,6 +278,25 @@ namespace aravis {
       LOG_GERROR_ARAVIS(err);
     }
 
+    std::vector<std::string> get_enumeration_strings(ArvCamera *cam, const char *feature)
+    {
+      std::vector<std::string> str_vals;
+      GuardedGError err;
+      guint num_values = -1;
+      const char **vals = arv_camera_dup_available_enumerations_as_strings(cam, feature, &num_values, err.storeError());
+      LOG_GERROR_ARAVIS(err);
+
+      if(!vals)
+        return str_vals;
+
+      for(int i=0;i<num_values;++i)
+        str_vals.push_back(vals[i]);
+
+      g_free(vals);
+
+      return str_vals;
+    }
+
     namespace bounds {
 
       void get_width(ArvCamera *cam, gint* min, gint* max) {
@@ -424,6 +443,7 @@ void CameraAravisNodelet::onInit()
       streams_[i].substreams.push_back({{0}, substream_names[i][j], CameraBufferPool::Ptr()});
   }
 
+  disableComponents();
   initPixelFormats();
 
   // set automatic rosparam features before bounds checking
@@ -543,6 +563,34 @@ int CameraAravisNodelet::discoverStreams(size_t stream_names_size)
   return num_streams;
 }
 
+void CameraAravisNodelet::disableComponents()
+{
+  for(int i = 0; i < streams_.size(); i++)
+  {
+    if (arv_camera_is_gv_device(p_camera_))
+      aravis::camera::gv::select_stream_channel(p_camera_,i);
+
+    //don't disable components if there is just one non-configured substream
+    if(streams_[i].substreams.size() == 1 && streams_[i].substreams[0].name.empty())
+      continue;
+
+    if (!implemented_features_["ComponentSelector"])
+       continue;
+
+    if (!implemented_features_["ComponentEnable"])
+       continue;
+
+    std::vector<std::string> components = aravis::camera::get_enumeration_strings(p_camera_, "ComponentSelector");
+
+    for(int j=0;j<components.size();++j)
+    {
+      ROS_INFO_STREAM("Disabling component: " << components[j]);
+      aravis::device::feature::set_string(p_device_, "ComponentSelector", components[j].c_str());
+      aravis::device::feature::set_boolean(p_device_, "ComponentEnable", false);
+    }
+  }
+}
+
 void CameraAravisNodelet::initPixelFormats()
 {
   ros::NodeHandle pnh = getPrivateNodeHandle();
@@ -568,7 +616,10 @@ void CameraAravisNodelet::initPixelFormats()
         aravis::device::feature::set_string(p_device_, "ComponentSelector", substream.name.c_str());
 
       if (implemented_features_["ComponentEnable"])
+      {
+        ROS_INFO_STREAM("Enabling component: " << substream.name);
         aravis::device::feature::set_boolean(p_device_, "ComponentEnable", true);
+      }
 
       if (implemented_features_["PixelFormat"] && pixel_formats[i].size())
         aravis::device::feature::set_string(p_device_, "PixelFormat", pixel_formats[i][j].c_str());
