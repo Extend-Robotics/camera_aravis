@@ -28,8 +28,11 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 # Version >= 0.8.17 -> ARV_UV_USB_MODE_ASYNC
+# Version >= 0.8.25 -> multipart support and fixes
 find_package(Aravis 0.8 REQUIRED)
 find_package(GLIB2 REQUIRED)
+
+find_package(OpenCV REQUIRED)
 
 generate_dynamic_reconfigure_options(cfg/CameraAravis.cfg)
 
@@ -58,7 +61,7 @@ generate_messages(
 )
 
 catkin_package(
-    DEPENDS Aravis GLIB2
+    DEPENDS Aravis GLIB2 OpenCV
     CATKIN_DEPENDS roscpp nodelet std_msgs sensor_msgs message_runtime image_transport camera_info_manager dynamic_reconfigure tf tf2_ros
     INCLUDE_DIRS
     LIBRARIES
@@ -69,6 +72,7 @@ include_directories(cfg
   ${catkin_INCLUDE_DIRS}
   ${Aravis_INCLUDE_DIRS}
   ${GLIB2_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
 )
 
 link_directories(${Aravis_LIBRARY_DIRS})
@@ -79,7 +83,7 @@ add_library(${PROJECT_NAME}
   src/conversion_utils.cpp
 )
 
-target_link_libraries(${PROJECT_NAME} ${Aravis_LIBRARIES} glib-2.0 gmodule-2.0 gobject-2.0 ${catkin_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${Aravis_LIBRARIES} glib-2.0 gmodule-2.0 gobject-2.0 ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 

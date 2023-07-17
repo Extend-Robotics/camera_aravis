@@ -11,6 +11,7 @@
 
   <arg name="channel_names"            default="Intensity,Range"/>
   <arg name="pixel_format"             default="Mono16,Coord3D_C32f"/>
+  <arg name="pixel_format_internal"    default="PhotoneoYCoCg420,"/>
 
   <arg name="width"                    default="1120"/>
   <arg name="height"                   default="800"/>
@@ -36,14 +37,15 @@
 
     <param name="publish_tf"           value="true"/>
     <param name="tf_publish_rate"      value="$(arg fps)"/>
-    <param name="pixel_format"          value="$(arg pixel_format)"/>
+    <param name="pixel_format"         value="$(arg pixel_format)"/>
+    <param name="pixel_format_internal" value="$(arg pixel_format_internal)"/>
 
     <!-- use GenICam SFNC names as stream control parameters -->
     <param name="Width"                value="$(arg width)"/>
     <param name="Height"               value="$(arg height)"/>
-    <param name="AcquisitionFrameRate" type="double" value="$(arg fps)"/>
+    <param name="AcquisitionFrameRate" value="$(arg fps)" type="double"/>
 
-    <param name="Gamma"                value="0.41"/>
+    <param name="Gamma"                value="1.0"/>
     <param name="Gain"                 value="0.0"/>
     <param name="AutoFunctionsROIPreset" value="AutoFunctionsROIPreset_Full"/>
     <param name="ExposureAuto"         value="Continuous"/>
@@ -52,6 +54,9 @@
 
     <!-- Needed for higher resolution -->
     <param name="OutputTopology"       value="RegularGrid"/>
+
+    <param name="ColorSettings_ISO"    value="200" type="int"/>
+
   </node>
 
 </launch>
