@@ -442,6 +442,8 @@ namespace photoneo
 
       const ChannelType delta = (1 << (PIXEL_DEPTH - 1)); // 2^9
       const ChannelType maxValue = 2 * delta - 1; //2^10 - 1 = 1023
+      const ChannelType maxTo8BitDiv = 4; //1023 max, we want max 255
+
       ChannelType r1 = 2 * y + co;
       ChannelType r = r1 > cg ? (r1 - cg) / 2 : ChannelType(0);
       ChannelType g1 = y + cg / 2;
@@ -450,7 +452,9 @@ namespace photoneo
       ChannelType b2 = (co + cg) / 2;
       ChannelType b = b1 > b2 ? (b1 - b2) : ChannelType(0);
 
-      return {(uint8_t)(std::min(r, maxValue) / 4), (uint8_t)(std::min(g, maxValue) / 4), (uint8_t)(std::min(b, maxValue) / 4)};
+      return {(uint8_t)(std::min(r, maxValue) / maxTo8BitDiv),
+              (uint8_t)(std::min(g, maxValue) / maxTo8BitDiv),
+              (uint8_t)(std::min(b, maxValue) / maxTo8BitDiv)};
   }
 
 } //namespace photoneo
