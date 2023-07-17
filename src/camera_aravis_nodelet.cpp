@@ -570,8 +570,8 @@ void CameraAravisNodelet::disableComponents()
     if (arv_camera_is_gv_device(p_camera_))
       aravis::camera::gv::select_stream_channel(p_camera_,i);
 
-    //don't disable components if there is just one substream configured
-    if(streams_[i].substreams.size() == 1)
+    //don't disable components if there is just one non-configured substream
+    if(streams_[i].substreams.size() == 1 && streams_[i].substreams[0].name.empty())
       continue;
 
     if (!implemented_features_["ComponentSelector"])
