@@ -426,6 +426,7 @@ void unpack565pImg(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const 
   out->encoding = out_format;
 }
 
+// Pixel depth of B, G, R, and Y channels. Chromatic channels Co and Cg have an additional bit.
 const int pixelDepth = 10;
 using ChannelType = std::uint16_t;
 using YCoCgType = ChannelType;
@@ -437,8 +438,8 @@ static RGBType photoneoYCoCgPixelRGB(const ChannelType y, const ChannelType co, 
     if (y == ChannelType(0)) {
         return {0, 0, 0};
     }
-    const ChannelType delta = (1 << (pixelDepth - 1));
-    const ChannelType maxValue = 2 * delta - 1;
+    const ChannelType delta = (1 << (pixelDepth - 1)); // 2^9
+    const ChannelType maxValue = 2 * delta - 1; //2^10 - 1 = 1023
     ChannelType r1 = 2 * y + co;
     ChannelType r = r1 > cg ? (r1 - cg) / 2 : ChannelType(0);
     ChannelType g1 = y + cg / 2;
@@ -449,6 +450,25 @@ static RGBType photoneoYCoCgPixelRGB(const ChannelType y, const ChannelType co, 
 
     return {(uint8_t)(std::min(r, maxValue) / 4), (uint8_t)(std::min(g, maxValue) / 4), (uint8_t)(std::min(b, maxValue) / 4)};
 }
+
+/**
+ * Provides conversion
+ *     BGR  <--> YCoCg 4:2:0,
+ * where the chromatic channels Co, Cg are subsampled in half resolution.
+ * The 2x2 plaquette of the YCoCg format consists of:
+ *   (0, 0): Y (10 bits), 1st half of Co (6 bits)
+ *   (1, 0): Y (10 bits), 2nd half of Co (6 bits)
+ *   (0, 1): Y (10 bits), 1st half of Cg (6 bits)
+ *   (1, 1): Y (10 bits), 2nd half of Cg (6 bits)
+ *
+ * Black pixels are treated specially in order to prevent artifacts in images containing valid pixels only in a subregion.
+ *
+ * NOTE: The YCoCg format used here differs from the reference by:
+ *        - a factor 2 in the both chromatic channels Co, Cg,
+ *        - an offset equal to the saturation value, which is added to Co and Cg to prevent negative values.
+ *
+ * @see https://en.wikipedia.org/wiki/YCoCg
+ */
 
 void photoneoYCoCg(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format)
 {
@@ -471,8 +491,8 @@ void photoneoYCoCg(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const 
   out->step = (3*in->step/2);
   out->data.resize((3*in->data.size()/2));
 
-  const int yShift = std::numeric_limits<ChannelType>::digits - pixelDepth;
-  const ChannelType mask = static_cast<ChannelType>((1 << yShift) - 1);
+  const int yShift = std::numeric_limits<ChannelType>::digits - pixelDepth; //16 - 10 = 6
+  const ChannelType mask = static_cast<ChannelType>((1 << yShift) - 1); //low order 6 bits
 
   in->encoding = sensor_msgs::image_encodings::MONO16;
   cv_bridge::CvImageConstPtr p_cv_in = cv_bridge::toCvShare(in);
@@ -483,11 +503,13 @@ void photoneoYCoCg(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const 
   for (int row = 0; row < ycocgImg.rows; row += 2)
       for (int col = 0; col < ycocgImg.cols; col += 2)
       {
-          const ChannelType y00 = ycocgImg(row, col) >> yShift;
+          const ChannelType y00 = ycocgImg(row, col) >> yShift; //extract Y value (6 bit shift)
           const ChannelType y01 = ycocgImg(row, col + 1) >> yShift;
           const ChannelType y10 = ycocgImg(row + 1, col) >> yShift;
           const ChannelType y11 = ycocgImg(row + 1, col + 1) >> yShift;
+          // reconstruct Co value from 4:2:0 subsampling
           const ChannelType co = ((ycocgImg(row, col) & mask) << yShift) + (ycocgImg(row, col + 1) & mask);
+          // reconstruct Cg value from 4:2:0 subsampling
           const ChannelType cg = ((ycocgImg(row + 1, col) & mask) << yShift) + (ycocgImg(row + 1, col + 1) & mask);
           // Note: We employ neareast neighbor interpolation for the subsampled Co, Cg channels.
           //       It's possible to implement bilinear interpolation in those channels.
