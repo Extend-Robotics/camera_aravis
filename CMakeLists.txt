@@ -25,7 +25,6 @@ find_package(catkin REQUIRED COMPONENTS
   dynamic_reconfigure
   tf
   tf2_ros
-  cv_bridge
 )
 
 # Version >= 0.8.17 -> ARV_UV_USB_MODE_ASYNC

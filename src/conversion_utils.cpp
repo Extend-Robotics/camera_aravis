@@ -24,7 +24,6 @@
 #include <camera_aravis/conversion_utils.h>
 
 #include <ros/ros.h>
-#include "cv_bridge/cv_bridge.h"
 
 #include <opencv2/core/core.hpp> //photoneoMotionCamYCoCg
 
@@ -502,19 +501,19 @@ void photoneoYCoCg420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, con
   out->height = in->height;
   out->width = in->width;
   out->is_bigendian = in->is_bigendian;
-  out->step = (3*in->step/2);
-  out->data.resize((3*in->data.size()/2));
+  out->step = out->width * sizeof(photoneo::RGBType);
+  out->data.resize(out->height * out->step);
 
   using namespace photoneo;
 
   const int yShift = std::numeric_limits<ChannelType>::digits - PIXEL_DEPTH; //16 - 10 = 6
   const ChannelType mask = static_cast<ChannelType>((1 << yShift) - 1); //low order 6 bits
 
-  in->encoding = sensor_msgs::image_encodings::MONO16;
-  cv_bridge::CvImageConstPtr p_cv_in = cv_bridge::toCvShare(in);
-  cv::Mat_<YCoCgType> ycocgImg = p_cv_in->image;
+  //wrap around input ROS Image data from buffer pool
+  cv::Mat_<YCoCgType> ycocgImg(in->height, in->width, (YCoCgType*)in->data.data(), in->step);
 
-  cv::Mat_<RGBType> rgbImg(ycocgImg.size());
+  //wrap around output ROS Image data from buffer pool
+  cv::Mat_<RGBType> rgbImg(ycocgImg.rows, ycocgImg.cols, (RGBType*)out->data.data(), out->step);
 
   for (int row = 0; row < ycocgImg.rows; row += 2)
       for (int col = 0; col < ycocgImg.cols; col += 2)
@@ -535,13 +534,6 @@ void photoneoYCoCg420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, con
           rgbImg(row + 1, col + 1) = photoneoYCoCgPixelRGB(y11, co, cg);
       }
 
-  if(rgbImg.step != out->step)
-  {
-    ROS_ERROR_STREAM("camera_aravis::photoneoMotionCamYCoCg() interrmediate rgb stride doesn't match output stride!");
-    return;
-  }
-
-  memcpy(out->data.data(), rgbImg.data, out->data.size());
   out->encoding = out_format;
 }
 
