@@ -51,8 +51,9 @@ void unpack10PackedMonoImg(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out
 void unpack12pImg(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format);
 void unpack12PackedImg(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format);
 void unpack565pImg(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format);
-//quirky Photoneo MotionCam custom YCoCg reported as GenICam Mono16
-void photoneoYCoCg(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format);
+
+//quirk pixel formats that are not defined in GenICam/GigE-Vision and come disguised as other format
+void photoneoYCoCg420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format);
 
 const std::map<std::string, ConversionFunction> CONVERSIONS_DICTIONARY =
 {
@@ -70,8 +71,7 @@ const std::map<std::string, ConversionFunction> CONVERSIONS_DICTIONARY =
  { "R8", std::bind(&renameImg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::MONO8) },
  { "G8", std::bind(&renameImg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::MONO8) },
  { "B8", std::bind(&renameImg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::MONO8) },
- { "Mono16", std::bind(&photoneoYCoCg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::RGB8) },
-// { "Mono16", std::bind(&renameImg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::MONO16) },
+ { "Mono16", std::bind(&renameImg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::MONO16) },
  { "Raw16", std::bind(&renameImg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::MONO16) },
  { "R16", std::bind(&renameImg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::MONO16) },
  { "G16", std::bind(&renameImg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::MONO16) },
@@ -155,7 +155,9 @@ const std::map<std::string, ConversionFunction> CONVERSIONS_DICTIONARY =
  { "BayerBG12Packed", std::bind(&unpack12PackedImg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::BAYER_BGGR16) },
  { "BayerGB12Packed", std::bind(&unpack12PackedImg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::BAYER_GBRG16) },
  { "BayerGR12Packed", std::bind(&unpack12PackedImg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::BAYER_GRBG16) },
- { "YUV422Packed", std::bind(&renameImg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::YUV422) }
+ { "YUV422Packed", std::bind(&renameImg, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::YUV422) },
+  // Crazy internal pixel formats fixing various device quirks
+ { "PhotoneoYCoCg420", std::bind(&photoneoYCoCg420, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::RGB8) },
 };
 
 } // end namespace camera_aravis

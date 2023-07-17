@@ -470,7 +470,7 @@ static RGBType photoneoYCoCgPixelRGB(const ChannelType y, const ChannelType co, 
  * @see https://en.wikipedia.org/wiki/YCoCg
  */
 
-void photoneoYCoCg(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format)
+void photoneoYCoCg420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format)
 {
   if (!in)
   {

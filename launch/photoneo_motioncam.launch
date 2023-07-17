@@ -11,6 +11,7 @@
 
   <arg name="channel_names"            default="Intensity,Range"/>
   <arg name="pixel_format"             default="Mono16,Coord3D_C32f"/>
+  <arg name="pixel_format_internal"    default="PhotoneoYCoCg420,"/>
 
   <arg name="width"                    default="1120"/>
   <arg name="height"                   default="800"/>
@@ -36,7 +37,8 @@
 
     <param name="publish_tf"           value="true"/>
     <param name="tf_publish_rate"      value="$(arg fps)"/>
-    <param name="pixel_format"          value="$(arg pixel_format)"/>
+    <param name="pixel_format"         value="$(arg pixel_format)"/>
+    <param name="pixel_format_internal" value="$(arg pixel_format_internal)"/>
 
     <!-- use GenICam SFNC names as stream control parameters -->
     <param name="Width"                value="$(arg width)"/>

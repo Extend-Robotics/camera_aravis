@@ -594,10 +594,14 @@ void CameraAravisNodelet::disableComponents()
 void CameraAravisNodelet::initPixelFormats()
 {
   ros::NodeHandle pnh = getPrivateNodeHandle();
-  std::string pixel_format_args;
-  std::vector<std::vector<std::string>> pixel_formats;
+  std::string pixel_format_args, pixel_format_args_internal;
+  std::vector<std::vector<std::string>> pixel_formats, pixel_formats_internal;
   pnh.param("pixel_format", pixel_format_args, pixel_format_args);
   parseStringArgs2D(pixel_format_args, pixel_formats);
+
+  //used to implement device quirks like data coming in different format than reported on GenICam
+  pnh.param("pixel_format_internal", pixel_format_args_internal, pixel_format_args_internal);
+  parseStringArgs2D(pixel_format_args_internal, pixel_formats_internal);
 
   // get pixel format name and translate into corresponding ROS name
   for(int i = 0; i < streams_.size(); i++) {
@@ -627,20 +631,26 @@ void CameraAravisNodelet::initPixelFormats()
       if (implemented_features_["PixelFormat"])
         sensor.pixel_format = std::string(aravis::device::feature::get_string(p_device_, "PixelFormat"));
 
-      const auto sensor_iter = CONVERSIONS_DICTIONARY.find(sensor.pixel_format);
+      std::string pixel_format = sensor.pixel_format;
+      if(i < pixel_formats_internal.size() && j < pixel_formats_internal[i].size() && !pixel_formats_internal[i][j].empty())
+      {
+        pixel_format = pixel_formats_internal[i][j];
+        ROS_WARN_STREAM("overriding internally GenICam pixel format " << sensor.pixel_format << " with " << pixel_format);
+      }
 
-      if (sensor_iter!=CONVERSIONS_DICTIONARY.end()) {
+      const auto sensor_iter = CONVERSIONS_DICTIONARY.find(pixel_format);
+
+      if (sensor_iter!=CONVERSIONS_DICTIONARY.end())
         substream.convert_format = sensor_iter->second;
-      }
-      else {
-        ROS_WARN_STREAM("There is no known conversion from " << sensor.pixel_format << " to a usual ROS image encoding. Likely you need to implement one.");
-      }
+      else
+        ROS_WARN_STREAM("There is no known conversion from " << pixel_format << " to a usual ROS image encoding. Likely you need to implement one.");
 
       if (implemented_features_["PixelFormat"])
         sensor.n_bits_pixel = ARV_PIXEL_FORMAT_BIT_PER_PIXEL(
           aravis::device::feature::get_integer(p_device_, "PixelFormat"));
-        config_.FocusPos =
-          implemented_features_["FocusPos"] ? aravis::device::feature::get_integer(p_device_, "FocusPos") : 0;
+
+      config_.FocusPos =
+        implemented_features_["FocusPos"] ? aravis::device::feature::get_integer(p_device_, "FocusPos") : 0;
     }
   }
 }
