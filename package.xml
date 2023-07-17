@@ -33,8 +33,11 @@
 
   <build_depend>aravis-dev</build_depend>
   <build_depend>libglib-dev</build_depend> <!-- Bugfix: Missing dependency in Debian Buster -->
+  <build_depend>cv_bridge</build_depend>
   <build_depend>message_generation</build_depend>
+
   <exec_depend>message_runtime</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
 
   <export>
     <nodelet plugin="${prefix}/nodelet_plugins.xml" />

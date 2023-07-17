@@ -24,6 +24,9 @@
 #include <camera_aravis/conversion_utils.h>
 
 #include <ros/ros.h>
+#include "cv_bridge/cv_bridge.h"
+
+#include <opencv2/core/core.hpp> //photoneoMotionCamYCoCg
 
 namespace camera_aravis
 {
@@ -420,6 +423,87 @@ void unpack565pImg(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const 
     to+=3;
     from+=2;
   }
+  out->encoding = out_format;
+}
+
+const int pixelDepth = 10;
+using ChannelType = std::uint16_t;
+using YCoCgType = ChannelType;
+
+using RGBChannelType = std::uint8_t;
+using RGBType = cv::Vec<RGBChannelType, 3>;
+
+static RGBType photoneoYCoCgPixelRGB(const ChannelType y, const ChannelType co, const ChannelType cg) {
+    if (y == ChannelType(0)) {
+        return {0, 0, 0};
+    }
+    const ChannelType delta = (1 << (pixelDepth - 1));
+    const ChannelType maxValue = 2 * delta - 1;
+    ChannelType r1 = 2 * y + co;
+    ChannelType r = r1 > cg ? (r1 - cg) / 2 : ChannelType(0);
+    ChannelType g1 = y + cg / 2;
+    ChannelType g = g1 > delta ? (g1 - delta) : ChannelType(0);
+    ChannelType b1 = y + 2 * delta;
+    ChannelType b2 = (co + cg) / 2;
+    ChannelType b = b1 > b2 ? (b1 - b2) : ChannelType(0);
+
+    return {(uint8_t)(std::min(r, maxValue) / 4), (uint8_t)(std::min(g, maxValue) / 4), (uint8_t)(std::min(b, maxValue) / 4)};
+}
+
+void photoneoYCoCg(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format)
+{
+  if (!in)
+  {
+    ROS_WARN("camera_aravis::photoneoMotionCamYCoCg(): no input image given.");
+    return;
+  }
+
+  if (!out)
+  {
+    out.reset(new sensor_msgs::Image);
+    ROS_INFO("camera_aravis::photoneoMotionCamYCoCg(): no output image given. Reserved a new one.");
+  }
+
+  out->header = in->header;
+  out->height = in->height;
+  out->width = in->width;
+  out->is_bigendian = in->is_bigendian;
+  out->step = (3*in->step/2);
+  out->data.resize((3*in->data.size()/2));
+
+  const int yShift = std::numeric_limits<ChannelType>::digits - pixelDepth;
+  const ChannelType mask = static_cast<ChannelType>((1 << yShift) - 1);
+
+  in->encoding = sensor_msgs::image_encodings::MONO16;
+  cv_bridge::CvImageConstPtr p_cv_in = cv_bridge::toCvShare(in);
+  cv::Mat_<YCoCgType> ycocgImg = p_cv_in->image;
+
+  cv::Mat_<RGBType> rgbImg(ycocgImg.size());
+
+  for (int row = 0; row < ycocgImg.rows; row += 2)
+      for (int col = 0; col < ycocgImg.cols; col += 2)
+      {
+          const ChannelType y00 = ycocgImg(row, col) >> yShift;
+          const ChannelType y01 = ycocgImg(row, col + 1) >> yShift;
+          const ChannelType y10 = ycocgImg(row + 1, col) >> yShift;
+          const ChannelType y11 = ycocgImg(row + 1, col + 1) >> yShift;
+          const ChannelType co = ((ycocgImg(row, col) & mask) << yShift) + (ycocgImg(row, col + 1) & mask);
+          const ChannelType cg = ((ycocgImg(row + 1, col) & mask) << yShift) + (ycocgImg(row + 1, col + 1) & mask);
+          // Note: We employ neareast neighbor interpolation for the subsampled Co, Cg channels.
+          //       It's possible to implement bilinear interpolation in those channels.
+          rgbImg(row, col)         = photoneoYCoCgPixelRGB(y00, co, cg);
+          rgbImg(row, col + 1)     = photoneoYCoCgPixelRGB(y01, co, cg);
+          rgbImg(row + 1, col)     = photoneoYCoCgPixelRGB(y10, co, cg);
+          rgbImg(row + 1, col + 1) = photoneoYCoCgPixelRGB(y11, co, cg);
+      }
+
+  if(rgbImg.step != out->step)
+  {
+    ROS_ERROR_STREAM("camera_aravis::photoneoMotionCamYCoCg() interrmediate rgb stride doesn't match output stride!");
+    return;
+  }
+
+  memcpy(out->data.data(), rgbImg.data, out->data.size());
   out->encoding = out_format;
 }
 
