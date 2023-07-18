@@ -7,7 +7,7 @@
 
   <arg name="sensor_name"              default="aravis_cam"/>
   <arg name="serial_no"                default=""/>
-  <arg name="camera_info_url"          default="file://$(find camera_aravis)/launch/calib_vis.yaml;file://$(find camera_aravis)/launch/calib_nir.yaml"/>
+  <arg name="camera_info_url"          default="file://$(find camera_aravis)/calibration/calib_vis.yaml;file://$(find camera_aravis)/calibration/calib_nir.yaml"/>
 
   <arg name="channel_names"            default="vis;nir"/>
   <arg name="pixel_format"             default="BayerRG8;Mono8"/>
