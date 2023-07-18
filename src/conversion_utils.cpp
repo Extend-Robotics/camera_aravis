@@ -27,6 +27,8 @@
 
 #include <opencv2/core/core.hpp> //photoneoMotionCamYCoCg
 
+#include <algorithm> //std::find
+
 namespace camera_aravis
 {
 
@@ -422,6 +424,53 @@ void unpack565pImg(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const 
     to+=3;
     from+=2;
   }
+  out->encoding = out_format;
+}
+
+void float_to_uint(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const float scale, const std::string out_format)
+{
+  const static std::vector<std::string> SUPPORTED_INPUT = {"Coord3D_C32f"}; //GenICam/GiGe-Vision pixel formats
+
+  if (!in)
+  {
+    ROS_WARN("camera_aravis::float_to_uint(): no input image given.");
+    return;
+  }
+
+  if (std::find(SUPPORTED_INPUT.begin(), SUPPORTED_INPUT.end(), in->encoding) == SUPPORTED_INPUT.end())
+  {
+    ROS_WARN("camera_aravis::float_to_uint(): expects float input pixel formats (GenICam/GigE-Vision):");
+
+    for(const std::string &pixel_format : SUPPORTED_INPUT)
+      ROS_WARN_STREAM(pixel_format);
+
+    ROS_WARN("if your format is also compatible add it to SUPPORTED_INPUT");
+    return;
+  }
+
+  if (!out)
+  {
+    out.reset(new sensor_msgs::Image);
+    ROS_INFO("camera_aravis::float_to_uint(): no output image given. Reserved a new one.");
+  }
+
+  out->header = in->header;
+  out->height = in->height;
+  out->width = in->width;
+  out->is_bigendian = in->is_bigendian;
+  out->step = out->width * sizeof(uint16_t);
+  out->data.resize(out->height * out->step);
+
+  //wrap around input ROS Image data from buffer pool
+  cv::Mat_<float> floatDepth(in->height, in->width, (float*)in->data.data(), in->step);
+
+  //wrap around output ROS Image data from buffer pool
+  cv::Mat_<uint16_t> uintDepth(out->height, out->width, (uint16_t*)out->data.data(), out->step);
+
+  floatDepth.convertTo(uintDepth, CV_16UC1, scale);
+
+  uint16_t middlePoint = uintDepth[uintDepth.rows/2][uintDepth.cols/2];
+
   out->encoding = out_format;
 }
 
