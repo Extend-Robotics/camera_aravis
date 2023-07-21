@@ -7,7 +7,6 @@
 
   <arg name="sensor_name"              default="aravis_camera"/>
   <arg name="serial_no"                default=""/>
-  <arg name="camera_info_url"          default=","/>
 
   <!-- MotionCam
        - with TextureSource = Color delivers Intensity as custom YCoCg 4:2:0 pixel format in GenICam/GigE-Vision Mono16
@@ -17,6 +16,10 @@
   <arg name="texture_source"           default="Color"/>
   <arg name="pixel_format"             default="Mono16,Coord3D_C32f"/>
   <arg name="pixel_format_internal"    default="PhotoneoYCoCg420,FloatToUint"/>
+
+  <!-- the Range and Intensity data is aligned, we use the same calibration twice  -->
+  <arg name="camera_info_url"          default="file://$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/Range.yaml,file://$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/Range.yaml"/>
+
 
   <arg name="width"                    default="1120"/>
   <arg name="height"                   default="800"/>
