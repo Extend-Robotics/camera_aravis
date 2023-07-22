@@ -30,9 +30,6 @@
       <param name="camera_info_url"      value="$(arg camera_info_url)"/>
       <param name="frame_id"             value="$(arg sensor_name)"/>
 
-      <param name="publish_tf"           value="true"/>
-      <param name="tf_publish_rate"      value="$(arg fps)"/>
-
       <param name="pixel_format"          value="$(arg pixel_format)"/>
 
       <!-- use GenICam SFNC names as stream control parameters -->
