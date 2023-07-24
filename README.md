@@ -84,10 +84,11 @@ To specify which camera to open, via a parameter:
 
 camera_aravis supports multisource cameras and multipart data
 
-use `channel_name`, `pixel_format` and `camera_info_url` to specify multisource/multipart camera
+use `channel_name`, `pixel_format`, `camera_info_url`, `frame_id` to specify multisource/multipart camera
 - `;` seperates multi-source channels
 - `,` separates multipart parts
 - even if you don't specify `camera_info_urls` keep the correct structure, e.g. `","`
+- specify `frame_id` for each source/part, e.g. `"camera_optical_frame,camera_optical_frame"`
 - for multipart scenario the order of components should match order the device sends them in
   - typically ordered by `ComponentIDValue`
 - for example multisource see `multisource_camera_aravis.launch`
