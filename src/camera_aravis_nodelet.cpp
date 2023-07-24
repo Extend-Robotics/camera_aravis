@@ -3,6 +3,7 @@
  * camera_aravis
  *
  * Copyright © 2022 Fraunhofer IOSB and contributors
+ * Copyright © 2023 Extend Robotics Limited and contributors
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -362,11 +363,6 @@ CameraAravisNodelet::~CameraAravisNodelet()
   if (software_trigger_thread_.joinable())
     software_trigger_thread_.join();
 
-  tf_thread_active_ = false;
-
-  if (tf_dyn_thread_.joinable())
-    tf_dyn_thread_.join();
-
   for(int i=0; i < streams_.size(); i++)
   {
     guint64 n_completed_buffers = 0;
@@ -409,18 +405,18 @@ void CameraAravisNodelet::onInit()
   // Get other (non GenIcam) parameter current values.
   pnh.param<double>("softwaretriggerrate", config_.softwaretriggerrate, config_.softwaretriggerrate);
   pnh.param<int>("mtu", config_.mtu, config_.mtu);
-  pnh.param<std::string>("frame_id", config_.frame_id, config_.frame_id);
   pnh.param<bool>("auto_master", config_.AutoMaster, config_.AutoMaster);
   pnh.param<bool>("auto_slave", config_.AutoSlave, config_.AutoSlave);
 
   std::string stream_channel_args;
   std::vector<std::vector<std::string>> substream_names;
 
-  if (pnh.getParam("channel_names", stream_channel_args)) {
+  if (pnh.getParam("channel_names", stream_channel_args))
     parseStringArgs2D(stream_channel_args, substream_names);
-  } else {
+  else
     substream_names = { {""} };
-  }
+
+  std::vector<std::vector<std::string>> frame_ids = getFrameIds(substream_names);
 
   connectToCamera();
 
@@ -440,7 +436,7 @@ void CameraAravisNodelet::onInit()
   {
     streams_.push_back({nullptr, CameraBufferPool::Ptr() });
     for(int j = 0; j < substream_names[i].size();++j)
-      streams_[i].substreams.push_back({{0}, substream_names[i][j], CameraBufferPool::Ptr()});
+      streams_[i].substreams.push_back({{0}, substream_names[i][j], frame_ids[i][j], CameraBufferPool::Ptr()});
   }
 
   disableComponents();
@@ -465,8 +461,6 @@ void CameraAravisNodelet::onInit()
 
   setAutoMaster(config_.AutoMaster);
   setAutoSlave(config_.AutoSlave);
-
-  publish_tf_optical();
 
   initCalibration();
 
@@ -498,6 +492,34 @@ void CameraAravisNodelet::onInit()
   // spawn camera stream in thread, so onInit() is not blocked
   spawning_ = true;
   spawn_stream_thread_ = std::thread(&CameraAravisNodelet::spawnStream, this);
+}
+
+std::vector<std::vector<std::string>> CameraAravisNodelet::getFrameIds(const std::vector<std::vector<std::string>> &substream_names) const
+{
+  ros::NodeHandle pnh = getPrivateNodeHandle();
+
+  std::string frame_id_args;
+  std::vector<std::vector<std::string>> frame_ids;
+
+  if (pnh.getParam("frame_id", frame_id_args))
+    parseStringArgs2D(frame_id_args, frame_ids);
+  else //set defaults to [node_name]/[substream_name]
+  {
+    frame_ids = substream_names;
+    for(uint s=0;s<streams_.size();++s)
+      for(uint ss=0;ss<streams_[s].substreams.size();++ss)
+        frame_ids[s][ss] = this->getName() + "/" + frame_ids[s][ss];
+  }
+
+  //resolve frame_ids with tf_prefix
+  std::string tf_prefix = tf::getPrefixParam(getNodeHandle());
+  ROS_INFO_STREAM("tf_prefix: " << tf_prefix);
+
+  for(uint s=0;s<streams_.size();++s)
+    for(uint ss=0;ss<streams_[s].substreams.size();++ss)
+      frame_ids[s][ss] = tf::resolve(tf_prefix, frame_ids[s][ss]);
+
+  return frame_ids;
 }
 
 void CameraAravisNodelet::connectToCamera()
@@ -779,41 +801,6 @@ void CameraAravisNodelet::readCameraSettings()
           "Software";
 }
 
-void CameraAravisNodelet::publish_tf_optical()
-{
-  ros::NodeHandle pnh = getPrivateNodeHandle();
-  pub_tf_optical_ = pnh.param<bool>("publish_tf", pub_tf_optical_); // should we publish tf transforms to camera optical frame?
-
-  if (!pub_tf_optical_)
-    return;
-
-  tf_optical_.header.frame_id = config_.frame_id;
-  tf_optical_.child_frame_id = config_.frame_id + "_optical";
-  tf_optical_.transform.translation.x = 0.0;
-  tf_optical_.transform.translation.y = 0.0;
-  tf_optical_.transform.translation.z = 0.0;
-  tf_optical_.transform.rotation.x = -0.5;
-  tf_optical_.transform.rotation.y = 0.5;
-  tf_optical_.transform.rotation.z = -0.5;
-  tf_optical_.transform.rotation.w = 0.5;
-
-  double tf_publish_rate;
-  pnh.param<double>("tf_publish_rate", tf_publish_rate, 0);
-  if (tf_publish_rate > 0.)
-  {
-    // publish dynamic tf at given rate (recommended when running as a Nodelet, since latching has bugs-by-design)
-    p_tb_.reset(new tf2_ros::TransformBroadcaster());
-    tf_dyn_thread_ = std::thread(&CameraAravisNodelet::publishTfLoop, this, tf_publish_rate);
-  }
-  else
-  {
-    // publish static tf only once (latched)
-    p_stb_.reset(new tf2_ros::StaticTransformBroadcaster());
-    tf_optical_.header.stamp = ros::Time::now();
-    p_stb_->sendTransform(tf_optical_);
-  }
-}
-
 void CameraAravisNodelet::initCalibration()
 {
   ros::NodeHandle pnh = getPrivateNodeHandle();
@@ -848,25 +835,21 @@ void CameraAravisNodelet::initCalibration()
 
   for(int i = 0; i < streams_.size(); i++) {
     // Start the camerainfo manager.
-    std::string camera_info_frame_id = config_.frame_id;
     Stream &src = streams_[i];
 
     for(int j = 0; j< src.substreams.size() ;++j)
     {
       Substream &sub = src.substreams[j];
 
-      if(!sub.name.empty())
-        camera_info_frame_id = config_.frame_id + '/' + sub.name;
-
       // Use separate node handles for CameraInfoManagers when using a Multisource/Multistream Camera
-      if(!sub.name.empty()) {
+      if(!sub.name.empty())
+      {
         sub.p_camera_info_node_handle.reset(new ros::NodeHandle(pnh, sub.name));
-        sub.p_camera_info_manager.reset(new camera_info_manager::CameraInfoManager(*sub.p_camera_info_node_handle, camera_info_frame_id, calib_urls[i][j]));
+        sub.p_camera_info_manager.reset(new camera_info_manager::CameraInfoManager(*sub.p_camera_info_node_handle, sub.frame_id, calib_urls[i][j]));
 
-      } else {
-        sub.p_camera_info_manager.reset(new camera_info_manager::CameraInfoManager(pnh, camera_info_frame_id, calib_urls[i][j]));
       }
-
+      else
+        sub.p_camera_info_manager.reset(new camera_info_manager::CameraInfoManager(pnh, sub.frame_id, calib_urls[i][j]));
 
       ROS_INFO("Reset %s Camera Info Manager", sub.name.c_str());
       ROS_INFO("%s Calib URL: %s", sub.name.c_str(), calib_urls[i][j].c_str());
@@ -905,6 +888,7 @@ void CameraAravisNodelet::printCameraInfo()
       ROS_INFO("    ROI x,y,w,h          = %d, %d, %d, %d", roi_.x, roi_.y, roi_.width, roi_.height);
       ROS_INFO("    Pixel format         = %s", sensor.pixel_format.c_str());
       ROS_INFO("    BitsPerPixel         = %lu", sensor.n_bits_pixel);
+      ROS_INFO("    frame_id             = %s", substream.frame_id.c_str());
     }
   }
 
@@ -1433,11 +1417,6 @@ void CameraAravisNodelet::tuneGvStream(ArvGvStream *p_stream)
 void CameraAravisNodelet::rosReconfigureCallback(Config &config, uint32_t level)
 {
   reconfigure_mutex_.lock();
-  std::string tf_prefix = tf::getPrefixParam(getNodeHandle());
-  ROS_DEBUG_STREAM("tf_prefix: " << tf_prefix);
-
-  if (config.frame_id == "")
-    config.frame_id = this->getName();
 
   // Limit params to legal values.
   config.AcquisitionFrameRate = CLAMP(config.AcquisitionFrameRate, config_min_.AcquisitionFrameRate,
@@ -1445,7 +1424,6 @@ void CameraAravisNodelet::rosReconfigureCallback(Config &config, uint32_t level)
   config.ExposureTime = CLAMP(config.ExposureTime, config_min_.ExposureTime, config_max_.ExposureTime);
   config.Gain = CLAMP(config.Gain, config_min_.Gain, config_max_.Gain);
   config.FocusPos = CLAMP(config.FocusPos, config_min_.FocusPos, config_max_.FocusPos);
-  config.frame_id = tf::resolve(tf_prefix, config.frame_id);
 
   if (use_ptp_stamp_)
     resetPtpClock();
@@ -1734,11 +1712,10 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, size_t stream_id)
                                        { return sub.cam_pub.getNumSubscribers() > 0; });
 
   const Substream &sub = stream.substreams[0];
-  const std::string &frame_id = sub.name.empty() ? config_.frame_id :
-                                config_.frame_id + "/" + sub.name + "(and possibly subframes)";
+  const std::string &frame_id_msg = sub.frame_id + " (and possibly subframes)";
 
   if (!buffer_success)
-    ROS_WARN("(%s) Frame error: %s", frame_id.c_str(), szBufferStatusFromInt[arv_buffer_get_status(p_buffer)]);
+    ROS_WARN("(%s) Frame error: %s", frame_id_msg.c_str(), szBufferStatusFromInt[arv_buffer_get_status(p_buffer)]);
 
   if(!buffer_success || !buffer_pool || !has_subscribers)
   {
@@ -1774,13 +1751,10 @@ void CameraAravisNodelet::processImageBuffer(ArvBuffer *p_buffer, size_t stream_
   Substream & substream = src.substreams[0];
   const Sensor & sensor = substream.sensor;
 
-  const std::string &frame_id = substream.name.empty() ? config_.frame_id :
-                                config_.frame_id + "/" + substream.name;
-
   // get the image message which wraps around this buffer
   sensor_msgs::ImagePtr msg_ptr = (*(src.p_buffer_pool))[p_buffer];
 
-  fillImage(msg_ptr, p_buffer, frame_id, sensor);
+  fillImage(msg_ptr, p_buffer, substream.frame_id, sensor);
 
   // do the magic of conversion into a ROS format
   if (substream.convert_format) {
@@ -1835,14 +1809,11 @@ void CameraAravisNodelet::processPartBuffer(ArvBuffer *p_buffer, size_t stream_i
   Substream & substream = src.substreams[substream_id];
   const Sensor & sensor = substream.sensor;
 
-  const std::string &frame_id = substream.name.empty() ? config_.frame_id :
-                                config_.frame_id + "/" + substream.name;
-
   // in multipart path, we can't map 1:1 aravis image with ROS image data
   // but we keep extra buffer pool on substream (part level)
   sensor_msgs::ImagePtr msg_ptr = substream.p_buffer_pool->getRecyclableImg();
 
-  fillImage(msg_ptr, p_buffer, frame_id, sensor);
+  fillImage(msg_ptr, p_buffer, substream.frame_id, sensor);
 
   //fill contents from part buffer
   msg_ptr->data.resize(size);
@@ -2045,26 +2016,6 @@ void CameraAravisNodelet::softwareTriggerLoop()
     }
   }
   ROS_INFO("Software trigger stopped.");
-}
-
-void CameraAravisNodelet::publishTfLoop(double rate)
-{
-  // Publish optical transform for the camera
-  ROS_WARN("Publishing dynamic camera transforms (/tf) at %g Hz", rate);
-
-  tf_thread_active_ = true;
-
-  ros::Rate loop_rate(rate);
-
-  while (ros::ok() && tf_thread_active_)
-  {
-    // Update the header for publication
-    tf_optical_.header.stamp = ros::Time::now();
-    ++tf_optical_.header.seq;
-    p_tb_->sendTransform(tf_optical_);
-
-    loop_rate.sleep();
-  }
 }
 
 void CameraAravisNodelet::discoverFeatures()

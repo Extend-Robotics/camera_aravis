@@ -3,6 +3,7 @@
  * camera_aravis
  *
  * Copyright © 2022 Fraunhofer IOSB and contributors
+ * Copyright © 2023 Extend Robotics Limited and contributors
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -91,7 +92,6 @@ private:
   std::string guid_ = "";
   bool use_ptp_stamp_ = false;
   bool pub_ext_camera_info_ = false;
-  bool pub_tf_optical_ = false;
 
   ArvCamera *p_camera_ = NULL;
   ArvDevice *p_device_ = NULL;
@@ -109,6 +109,7 @@ private:
   {
     Sensor sensor;
     std::string name;
+    std::string frame_id;
     //pool for multipart path where images don't map 1:1 to aravis buffers
     CameraBufferPool::Ptr p_buffer_pool;
     ConversionFunction convert_format;
@@ -136,6 +137,7 @@ private:
   int32_t acquire_ = 0;
 
   virtual void onInit() override;
+  std::vector<std::vector<std::string>> getFrameIds(const std::vector<std::vector<std::string>> &substream_names) const;
   void connectToCamera();
   int discoverStreams(size_t stream_names_size);
   void disableComponents();
@@ -144,7 +146,6 @@ private:
   void setUSBMode();
   void setCameraSettings();
   void readCameraSettings();
-  void publish_tf_optical();
   void initCalibration();
   void printCameraInfo();
 
@@ -221,8 +222,6 @@ protected:
   // triggers a shot at regular intervals, sleeps in between
   void softwareTriggerLoop();
 
-  void publishTfLoop(double rate);
-
   void discoverFeatures();
 
   static void parseStringArgs(std::string in_arg_string, std::vector<std::string> &out_args, char seprator = ';');
@@ -240,12 +239,6 @@ protected:
 
   std::unique_ptr<dynamic_reconfigure::Server<Config> > reconfigure_server_;
   boost::recursive_mutex reconfigure_mutex_;
-
-  std::unique_ptr<tf2_ros::StaticTransformBroadcaster> p_stb_;
-  std::unique_ptr<tf2_ros::TransformBroadcaster> p_tb_;
-  geometry_msgs::TransformStamped tf_optical_;
-  std::thread tf_dyn_thread_;
-  std::atomic_bool tf_thread_active_;
 
   CameraAutoInfo auto_params_;
   ros::Publisher auto_pub_;
