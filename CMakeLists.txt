@@ -116,6 +116,10 @@ install(DIRECTORY launch/
   PATTERN ".svn" EXCLUDE
 )
 
+install(DIRECTORY calibration/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/calibration
+)
+
 install(FILES
   nodelet_plugins.xml
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
