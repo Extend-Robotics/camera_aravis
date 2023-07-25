@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
 <package format="2">
   <name>camera_aravis</name>
-  <version>4.0.4</version>
+  <version>4.1.0</version>
   <description>camera_aravis: A complete and comfortable GenICam (USB3Vision and GigEVision) based camera driver for ROS (ethernet and usb).</description>
 
-  <maintainer email="boitumelo.ruf@iosb.fraunhofer.de">Boitumelo Ruf, Fraunhofer IOSB</maintainer>
+  <maintainer email="bartosz.meglicki@extendrobotics.com">Bartosz Meglicki, Extend Robotics Limited</maintainer>
   
   <author email="boitumelo.ruf@iosb.fraunhofer.de">Boitumelo Ruf, Fraunhofer IOSB</author>
   <author email="dominik.kleiser@iosb.fraunhofer.de">Dominik Kleiser, Fraunhofer IOSB</author>
@@ -12,10 +12,11 @@
   <author email="stevesafarik@gmail.com">Steve Safarik, Straw Lab</author>
   <author email="andrew.straw@imp.ac.at">Andrew Straw, Straw Lab</author>
   <author email="fvanbreugel@unr.edu">Floris van Breugel, van Breugel Lab</author>
+  <author email="meglickib@gmail.com">Bartosz Meglicki, Extend Robotics Limited</author>
 
   <license>LGPL v2</license>
 
-  <url type="website">https://github.com/FraunhoferIOSB/camera_aravis</url>
+  <url type="website">https://github.com/Extend-Robotics/camera_aravis</url>
   <url type="website">https://github.com/AravisProject/aravis</url>
 
   <buildtool_depend>catkin</buildtool_depend>
@@ -29,9 +30,14 @@
   <depend>dynamic_reconfigure</depend>
   <depend>tf</depend>
   <depend>tf2_ros</depend>
-  <depend>aravis</depend>
 
+<!--Commented out for now:
+    - we don't want ROS to resolve this to libaravis-0.6-0
+    - we use 0.8.27 with multipart support
+  <depend>aravis</depend>
   <build_depend>aravis-dev</build_depend>
+-->
+
   <build_depend>libglib-dev</build_depend> <!-- Bugfix: Missing dependency in Debian Buster -->
   <build_depend>message_generation</build_depend>
 
