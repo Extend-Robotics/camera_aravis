@@ -2,6 +2,20 @@
 Changelog for package camera_aravis
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.1.0 (2023-07-25)
+
+* Launchfile and sample calibration for Photoneo MotionCam M+ (multipart)
+* Rework frame_id support
+  * Breaking changes
+   * Removed frame_id from dynamic reconfigure
+   * Removed optical frame tf publishing
+* Internal FloatToUint pixel format (depth map conversion)
+* Internal custom Photoneo YCoCg 4:2:0 subsampling pixel format
+* Mechanism for overriding pixel format used internally
+* Automatically disable/enable multipart components
+* Multipart data support
+  * Breaking changes: multisource separator is now `;` and multipart `,`
+
 4.0.4 (2022-12-23)
 ------------------
 * Update package maintainer
