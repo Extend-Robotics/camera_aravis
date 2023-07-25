@@ -444,18 +444,19 @@ void CameraAravisNodelet::onInit()
 
   // set automatic rosparam features before bounds checking
   // as some settings have side effects on sensor size/ROI
-  for(int i = 0; i < streams_.size(); i++)
-  {
-    if (arv_camera_is_gv_device(p_camera_))
-      aravis::camera::gv::select_stream_channel(p_camera_, i);
-    writeCameraFeaturesFromRosparam();
-  }
+  // we will also set them second time (!)
+  writeCameraFeaturesFromRosparamForStreams();
 
   getBounds();
 
   setUSBMode();
 
   setCameraSettings();
+
+  // set automatic rosparam features before camera readout
+  // we do it second time here (!)
+  // to prevent dynamic reconfigure defualts overwriting node params
+  writeCameraFeaturesFromRosparamForStreams();
 
   readCameraSettings();
 
@@ -2132,6 +2133,16 @@ void CameraAravisNodelet::parseStringArgs2D(std::string in_arg_string, std::vect
     std::vector<std::string> substreams;
     parseStringArgs(streams[i], substreams, ',');
     out_args.push_back(substreams);
+  }
+}
+
+void CameraAravisNodelet::writeCameraFeaturesFromRosparamForStreams()
+{
+  for(int i = 0; i < streams_.size(); i++)
+  {
+    if (arv_camera_is_gv_device(p_camera_))
+      aravis::camera::gv::select_stream_channel(p_camera_, i);
+    writeCameraFeaturesFromRosparam();
   }
 }
 

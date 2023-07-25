@@ -2,10 +2,9 @@
 <launch>
   <arg name="load_manager"             default="true"/>
   <arg name="manager_name"             default="camera_manager"/>
-  <arg name="manager"                  value="/$(arg manager_name)"/>
   <arg name="manager_threads"          default="4"/>
 
-  <arg name="sensor_name"              default="aravis_camera"/>
+  <arg name="sensor_name"              default="camera"/>
   <arg name="serial_no"                default=""/>
 
   <!-- MotionCam
@@ -34,34 +33,37 @@
   </node>
 
   <!-- Aravis RGB camera nodelet -->
-  <node pkg="nodelet" type="nodelet" name="$(arg sensor_name)" args="standalone camera_aravis/CameraAravisNodelet" output="screen">
-    <param name="verbose"              value="$(arg verbose)"/>
+  <node pkg="nodelet" type="nodelet" name="$(arg sensor_name)" args="load camera_aravis/CameraAravisNodelet $(arg manager_name)" output="screen">
+    <param name="verbose"                value="$(arg verbose)"/>
 
-    <param name="guid"                 value="$(arg serial_no)"/>
-    <param name="camera_info_url"      value="$(arg camera_info_url)"/>
-    <param name="frame_id"             value="$(arg frame_id)"/>
+    <param name="guid"                   value="$(arg serial_no)"/>
 
     <!-- Multistream Camera (not Multisource) -->
-    <param name="channel_names"        value="$(arg channel_names)"/>
+    <param name="channel_names"          value="$(arg channel_names)"/>
 
-    <param name="pixel_format"         value="$(arg pixel_format)"/>
-    <param name="pixel_format_internal" value="$(arg pixel_format_internal)"/>
+    <param name="pixel_format"           value="$(arg pixel_format)"/>
+    <param name="pixel_format_internal"  value="$(arg pixel_format_internal)"/>
+
+    <param name="frame_id"               value="$(arg frame_id)"/>
+    <param name="camera_info_url"        value="$(arg camera_info_url)"/>
 
     <!-- use GenICam SFNC names as stream control parameters -->
-    <param name="Width"                value="$(arg width)"/>
-    <param name="Height"               value="$(arg height)"/>
-    <param name="AcquisitionFrameRate" value="$(arg fps)" type="double"/>
+    <param name="Width"                  value="$(arg width)"/>
+    <param name="Height"                 value="$(arg height)"/>
 
-    <param name="Gamma"                value="1.0"/>
-    <param name="Gain"                 value="0.0"/>
+    <param name="AcquisitionFrameRate"   value="$(arg fps)" type="double"/>
+    <param name="Gamma"                  value="1.0"/>
+    <param name="Gain"                   value="0.0"/>
     <param name="AutoFunctionsROIPreset" value="AutoFunctionsROIPreset_Full"/>
-    <param name="ExposureAuto"         value="Continuous"/>
-    <param name="GainAuto"             value="Continuous"/>
-    <param name="BalanceWhiteAuto"     value="Continuous"/>
+    <param name="ExposureAuto"           value="Continuous"/>
+    <param name="GainAuto"               value="Continuous"/>
+    <param name="BalanceWhiteAuto"       value="Continuous"/>
 
-    <param name="OutputTopology"       value="RegularGrid"/>  <!-- RegularGrid required for higher resolution and modelling optics with intrinsics/distortion-->
-    <param name="ColorSettings_ISO"    value="200" type="int"/>
-    <param name="TextureSource"        value="$(arg texture_source)" type="str"/>
+    <!-- RegularGrid required for higher resolution and modelling optics with intrinsics/distortion-->
+    <param name="OutputTopology"         value="RegularGrid"/>
+    <param name="ColorSettings_ISO"      value="200" type="int"/>
+    <param name="ColorSettings_Exposure" value="20.480000"/>
+    <param name="TextureSource"          value="$(arg texture_source)" type="str"/>
 
   </node>
 
