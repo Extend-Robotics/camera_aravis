@@ -227,6 +227,7 @@ protected:
   static void parseStringArgs(std::string in_arg_string, std::vector<std::string> &out_args, char seprator = ';');
   static void parseStringArgs2D(std::string in_arg_string, std::vector<std::vector<std::string>> &out_args);
 
+  void writeCameraFeaturesFromRosparamForStreams();
   // WriteCameraFeaturesFromRosparam()
   // Read ROS parameters from this node's namespace, and see if each parameter has a similarly named & typed feature in the camera.  Then set the
   // camera feature to that value.  For example, if the parameter camnode/Gain is set to 123.0, then we'll write 123.0 to the Gain feature
