@@ -25,6 +25,9 @@
 #include <memory>
 #include <unordered_set>
 
+//Gathers stats during encoding and outputs them to console
+//#define ARAVIS_BUFFER_PROCESSING_BENCHMARK
+
 #define ROS_ASSERT_ENABLED
 #include <ros/console.h>
 
@@ -1725,7 +1728,19 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, size_t stream_id)
   }
 
   // at this point we have a valid buffer to work with
+
+  #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
+    ros::Time t_begin = ros::Time::now();
+  #endif
+
   processBuffer(p_buffer, stream_id);
+
+  #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
+    ros::Time t_buff = ros::Time::now();
+    const double NS_IN_MS = 1000000.0;
+    ROS_INFO_STREAM("aravis stream " << stream_id <<  " buffer processing time: " <<
+                    (t_buff - t_begin).toNSec() / NS_IN_MS << " ms");
+  #endif
 }
 
 void CameraAravisNodelet::processBuffer(ArvBuffer *p_buffer, size_t stream_id)
@@ -1794,7 +1809,20 @@ void CameraAravisNodelet::processMultipartBuffer(ArvBuffer *p_buffer, size_t str
   {
       size_t dataSize = 0;
       auto data = arv_buffer_get_part_data(p_buffer, i, &dataSize);
+
+      #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
+        ros::Time t_begin = ros::Time::now();
+      #endif
+
       processPartBuffer(p_buffer, stream_id, i, data, dataSize);
+
+      #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
+        ros::Time t_buff = ros::Time::now();
+        const double NS_IN_MS = 1000000.0;
+        ROS_INFO_STREAM("aravis stream " << stream_id << " part " << i <<
+                        " buffer processing time: " <<
+                        (t_buff - t_begin).toNSec() / NS_IN_MS << " ms");
+      #endif
   }
 
   //we are done with multipart buffer

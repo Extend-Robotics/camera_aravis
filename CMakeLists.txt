@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.10)
 
 project(camera_aravis)
 
+## Enable simple buffer processing benchmark output
+#add_compile_definitions(ARAVIS_BUFFER_PROCESSING_BENCHMARK)
+
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules)
 
 if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
