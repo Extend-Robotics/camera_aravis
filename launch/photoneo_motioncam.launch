@@ -63,6 +63,7 @@
     <param name="OutputTopology"         value="RegularGrid"/>
     <param name="ColorSettings_ISO"      value="200" type="int"/>
     <param name="ColorSettings_Exposure" value="20.480000"/>
+    <param name="ExposureTime"           value="10.240000"/>
     <param name="TextureSource"          value="$(arg texture_source)" type="str"/>
 
   </node>
