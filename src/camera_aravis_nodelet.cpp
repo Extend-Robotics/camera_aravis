@@ -24,6 +24,7 @@
 
 #include <memory>
 #include <unordered_set>
+#include <chrono>
 
 //Gathers stats during encoding and outputs them to console
 //#define ARAVIS_BUFFER_PROCESSING_BENCHMARK
@@ -370,6 +371,7 @@ CameraAravisNodelet::~CameraAravisNodelet()
     for(int j=0; j < streams_[i].substreams.size(); j++)
       if(streams_[i].substreams[j].buffer_thread.joinable())
       {
+        streams_[i].substreams[j].buffer_thread_stop = true;
         streams_[i].substreams[j].buffer_thread.join();
         ROS_INFO_STREAM("Joined thread for stream " << i << " substream " << j);
       }
@@ -1705,11 +1707,18 @@ void CameraAravisNodelet::newBufferReadyCallback(ArvStream *p_stream, gpointer c
   }
 }
 
-void CameraAravisNodelet::substreamBufferThreadMain(const int stream, const int substream)
+void CameraAravisNodelet::substreamBufferThreadMain(const int stream_id, const int substream_id)
 {
-  ROS_INFO_STREAM("Started thread for stream " << stream << " substream " << substream);
+  using namespace std::chrono_literals;
 
-  ROS_INFO_STREAM("Finished thread for stream " << stream << " substream " << substream);
+  ROS_INFO_STREAM("Started thread for stream " << stream_id << " substream " << substream_id);
+
+  Substream &substream = streams_[stream_id].substreams[substream_id];
+
+  while(!substream.buffer_thread_stop)
+    std::this_thread::sleep_for(1000ms);
+
+  ROS_INFO_STREAM("Finished thread for stream " << stream_id << " substream " << substream_id);
 }
 
 void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, size_t stream_id)

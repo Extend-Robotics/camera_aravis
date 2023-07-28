@@ -122,6 +122,7 @@ private:
     ros::Publisher extended_camera_info_pub;
 
     std::thread buffer_thread;
+    bool buffer_thread_stop;
     //std::mutex buffer_data_mutex;
     //std::condition_variable buffer_ready_condition;
   };
@@ -184,7 +185,7 @@ protected:
   // Buffer Callback Helper
   void newBufferReady(ArvStream *p_stream, size_t stream_id);
 
-  void substreamBufferThreadMain(const int stream, const int substream);
+  void substreamBufferThreadMain(const int stream_id, const int substream_id);
 
   // Process Validated Buffer
   void processBuffer(ArvBuffer *p_buffer, size_t stream_id);
