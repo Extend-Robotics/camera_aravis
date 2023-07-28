@@ -123,8 +123,8 @@ private:
 
     std::thread buffer_thread;
     bool buffer_thread_stop;
-    //std::mutex buffer_data_mutex;
-    //std::condition_variable buffer_ready_condition;
+    std::mutex buffer_data_mutex;
+    std::condition_variable buffer_ready_condition;
   };
 
   // a single stream may transfer multiple substreams (multipart/chunked data)

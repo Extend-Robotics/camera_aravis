@@ -448,8 +448,13 @@ void CameraAravisNodelet::onInit()
   for(int i = 0; i < num_streams; i++)
   {
     streams_.push_back({nullptr, CameraBufferPool::Ptr() });
+    streams_[i].substreams = std::vector<Substream>(substream_names[i].size());
     for(int j = 0; j < substream_names[i].size();++j)
-      streams_[i].substreams.push_back({{0}, substream_names[i][j], frame_ids[i][j], CameraBufferPool::Ptr()});
+    {
+      Substream &sub = streams_[i].substreams[j];
+      sub.name = substream_names[i][j];
+      sub.frame_id = frame_ids[i][j];
+    }
   }
 
   disableComponents();
@@ -1716,7 +1721,18 @@ void CameraAravisNodelet::substreamBufferThreadMain(const int stream_id, const i
   Substream &substream = streams_[stream_id].substreams[substream_id];
 
   while(!substream.buffer_thread_stop)
-    std::this_thread::sleep_for(1000ms);
+  {
+    std::unique_lock<std::mutex> lock(substream.buffer_data_mutex);
+
+    if(substream.buffer_ready_condition.wait_for(lock, 1000ms) ==  std::cv_status::timeout)
+    { //check termination conditions
+      if(substream.buffer_thread_stop || !ros::ok())
+        break;
+
+      continue;
+    }
+    ROS_INFO_STREAM("woke on new data");
+  }
 
   ROS_INFO_STREAM("Finished thread for stream " << stream_id << " substream " << substream_id);
 }
@@ -1843,6 +1859,13 @@ void CameraAravisNodelet::processMultipartBuffer(ArvBuffer *p_buffer, size_t str
       #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
         ros::Time t_begin = ros::Time::now();
       #endif
+
+      Substream &substream = streams_[stream_id].substreams[i];
+      {
+        std::lock_guard<std::mutex> lock_guard(substream.buffer_data_mutex);
+        //modify shared data
+      }
+      substream.buffer_ready_condition.notify_one();
 
       processPartBuffer(p_buffer, stream_id, i, data, dataSize);
 
