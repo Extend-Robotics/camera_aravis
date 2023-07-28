@@ -2,8 +2,14 @@
 Changelog for package camera_aravis
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-4.1.0 (2023-07-25)
+4.1.1 (2023-07-28)
+* Fix exposure time incorrectly set for MotionCam from dynamic reconfigure
+* Add simple internal buffer processing time benchmark
+* Decouple application buffer processing from aravis
+  * Fixes ARV_BUFFER_STATUS_TIMEOUT warnings
 
+4.1.0 (2023-07-25)
+------------------
 * Launchfile and sample calibration for Photoneo MotionCam M+ (multipart)
 * Rework frame_id support
   * Breaking changes
