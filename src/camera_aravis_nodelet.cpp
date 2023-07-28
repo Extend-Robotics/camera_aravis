@@ -1712,55 +1712,6 @@ void CameraAravisNodelet::newBufferReadyCallback(ArvStream *p_stream, gpointer c
   }
 }
 
-void CameraAravisNodelet::substreamThreadMain(const int stream_id, const int substream_id)
-{
-  using namespace std::chrono_literals;
-
-  Substream &substream = streams_[stream_id].substreams[substream_id];
-
-  ROS_INFO_STREAM("Started thread for stream " << stream_id << " " << substream.name);
-
-  while(!substream.buffer_thread_stop)
-  {
-    std::unique_lock<std::mutex> lock(substream.buffer_data_mutex);
-
-    if(substream.buffer_ready_condition.wait_for(lock, 1000ms) == std::cv_status::timeout)
-    { //check termination conditions
-      if(substream.buffer_thread_stop || !ros::ok())
-        break;
-
-      continue;
-    }
-
-    //we own the lock now and new data is waiting
-    //take ownership of it
-    sensor_msgs::ImagePtr p_buffer_image = substream.p_buffer_image;
-    substream.p_buffer_image.reset();
-
-    ArvBuffer *p_buffer = substream.p_buffer;
-    substream.p_buffer = nullptr;
-
-    //no need to keep the lock for processing time,
-    lock.unlock();
-
-    #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
-      ros::Time t_begin = ros::Time::now();
-    #endif
-
-    processPartBuffer(p_buffer, stream_id, substream_id);
-
-    #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
-      ros::Time t_buff = ros::Time::now();
-      const double NS_IN_MS = 1000000.0;
-      ROS_INFO_STREAM("aravis stream " << stream_id << " " << substream.name <<
-                      " buffer processing time: " <<
-                      (t_buff - t_begin).toNSec() / NS_IN_MS << " ms");
-    #endif
-  }
-
-  ROS_INFO_STREAM("Finished thread for stream " << stream_id << " " << substream.name);
-}
-
 void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, size_t stream_id)
 {
   ArvBuffer *p_buffer = arv_stream_try_pop_buffer(p_stream);
@@ -1903,6 +1854,55 @@ void CameraAravisNodelet::processMultipartBuffer(ArvBuffer *p_buffer, size_t str
   //substreams through substream.p_buffer_image
   //it will be returned to aravis when all substreams
   //are done with processing
+}
+
+void CameraAravisNodelet::substreamThreadMain(const int stream_id, const int substream_id)
+{
+  using namespace std::chrono_literals;
+
+  Substream &substream = streams_[stream_id].substreams[substream_id];
+
+  ROS_INFO_STREAM("Started thread for stream " << stream_id << " " << substream.name);
+
+  while(!substream.buffer_thread_stop)
+  {
+    std::unique_lock<std::mutex> lock(substream.buffer_data_mutex);
+
+    if(substream.buffer_ready_condition.wait_for(lock, 1000ms) == std::cv_status::timeout)
+    { //check termination conditions
+      if(substream.buffer_thread_stop || !ros::ok())
+        break;
+
+      continue;
+    }
+
+    //we own the lock now and new data is waiting
+    //take ownership of it
+    sensor_msgs::ImagePtr p_buffer_image = substream.p_buffer_image;
+    substream.p_buffer_image.reset();
+
+    ArvBuffer *p_buffer = substream.p_buffer;
+    substream.p_buffer = nullptr;
+
+    //no need to keep the lock for processing time,
+    lock.unlock();
+
+    #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
+      ros::Time t_begin = ros::Time::now();
+    #endif
+
+    processPartBuffer(p_buffer, stream_id, substream_id);
+
+    #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
+      ros::Time t_buff = ros::Time::now();
+      const double NS_IN_MS = 1000000.0;
+      ROS_INFO_STREAM("aravis stream " << stream_id << " " << substream.name <<
+                      " buffer processing time: " <<
+                      (t_buff - t_begin).toNSec() / NS_IN_MS << " ms");
+    #endif
+  }
+
+  ROS_INFO_STREAM("Finished thread for stream " << stream_id << " " << substream.name);
 }
 
 void CameraAravisNodelet::processPartBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substream_id)
