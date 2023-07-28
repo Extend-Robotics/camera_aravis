@@ -197,7 +197,7 @@ protected:
   void processImageBuffer(ArvBuffer *p_buffer, size_t stream_id);
   void processChunkDataBuffer(ArvBuffer *p_buffer, size_t stream_id);
   void processMultipartBuffer(ArvBuffer *p_buffer, size_t stream_id);
-  void processPartBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substream_id, const void* data, size_t size);
+  void processPartBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substream_id);
 
   void fillImage(const sensor_msgs::ImagePtr &msg_ptr, ArvBuffer *p_buffer, const std::string frame_id, const Sensor& sensor);
   void fillCameraInfo(Substream &substream, const std_msgs::Header &header);

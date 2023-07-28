@@ -1732,18 +1732,22 @@ void CameraAravisNodelet::substreamThreadMain(const int stream_id, const int sub
       continue;
     }
 
+    //we own the lock now and new data is waiting
+    //take ownership of it
+    sensor_msgs::ImagePtr p_buffer_image = substream.p_buffer_image;
+    substream.p_buffer_image.reset();
+
+    ArvBuffer *p_buffer = substream.p_buffer;
+    substream.p_buffer = nullptr;
+
+    //no need to keep the lock for processing time,
+    lock.unlock();
+
     #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
       ros::Time t_begin = ros::Time::now();
     #endif
 
-    size_t dataSize = 0;
-    auto data = arv_buffer_get_part_data(substream.p_buffer, substream_id, &dataSize);
-
-    processPartBuffer(substream.p_buffer, stream_id, substream_id, data, dataSize);
-
-    //release stream level aravis buffer
-    substream.p_buffer = nullptr;
-    substream.p_buffer_image.reset();
+    processPartBuffer(p_buffer, stream_id, substream_id);
 
     #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
       ros::Time t_buff = ros::Time::now();
@@ -1884,6 +1888,10 @@ void CameraAravisNodelet::processMultipartBuffer(ArvBuffer *p_buffer, size_t str
 
       { //shared data for substream with substreamThreadMain
         std::lock_guard<std::mutex> lock_guard(substream.buffer_data_mutex);
+
+        if(substream.p_buffer)
+          ROS_WARN_STREAM("Dropped unprocessed data for steam " << stream_id << " " << substream.name);
+
         substream.p_buffer = p_buffer;
         substream.p_buffer_image = msg_ptr;
       }
@@ -1897,11 +1905,14 @@ void CameraAravisNodelet::processMultipartBuffer(ArvBuffer *p_buffer, size_t str
   //are done with processing
 }
 
-void CameraAravisNodelet::processPartBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substream_id, const void* data, size_t size)
+void CameraAravisNodelet::processPartBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substream_id)
 {
   Stream & src = streams_[stream_id];
   Substream & substream = src.substreams[substream_id];
   const Sensor & sensor = substream.sensor;
+
+  size_t size = 0;
+  const void* data = arv_buffer_get_part_data(p_buffer, substream_id, &size);
 
   // in multipart path, we can't map 1:1 aravis image with ROS image data
   // but we keep extra buffer pool on substream (part level)
