@@ -980,7 +980,7 @@ void CameraAravisNodelet::spawnStream()
           //create non-aravis buffer pools for multipart part part images recycling
           stream.substreams[j].p_buffer_pool.reset(new CameraBufferPool(nullptr, 0, 0));
           //start substream processing threads
-          stream.substreams[j].buffer_thread = std::thread(&CameraAravisNodelet::substreamBufferThreadMain, this, i, j);
+          stream.substreams[j].buffer_thread = std::thread(&CameraAravisNodelet::substreamThreadMain, this, i, j);
         }
 
         if (arv_camera_is_gv_device(p_camera_))        
@@ -1712,29 +1712,49 @@ void CameraAravisNodelet::newBufferReadyCallback(ArvStream *p_stream, gpointer c
   }
 }
 
-void CameraAravisNodelet::substreamBufferThreadMain(const int stream_id, const int substream_id)
+void CameraAravisNodelet::substreamThreadMain(const int stream_id, const int substream_id)
 {
   using namespace std::chrono_literals;
 
-  ROS_INFO_STREAM("Started thread for stream " << stream_id << " substream " << substream_id);
-
   Substream &substream = streams_[stream_id].substreams[substream_id];
+
+  ROS_INFO_STREAM("Started thread for stream " << stream_id << " " << substream.name);
 
   while(!substream.buffer_thread_stop)
   {
     std::unique_lock<std::mutex> lock(substream.buffer_data_mutex);
 
-    if(substream.buffer_ready_condition.wait_for(lock, 1000ms) ==  std::cv_status::timeout)
+    if(substream.buffer_ready_condition.wait_for(lock, 1000ms) == std::cv_status::timeout)
     { //check termination conditions
       if(substream.buffer_thread_stop || !ros::ok())
         break;
 
       continue;
     }
-    ROS_INFO_STREAM("woke on new data");
+
+    #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
+      ros::Time t_begin = ros::Time::now();
+    #endif
+
+    size_t dataSize = 0;
+    auto data = arv_buffer_get_part_data(substream.p_buffer, substream_id, &dataSize);
+
+    processPartBuffer(substream.p_buffer, stream_id, substream_id, data, dataSize);
+
+    //release stream level aravis buffer
+    substream.p_buffer = nullptr;
+    substream.p_buffer_image.reset();
+
+    #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
+      ros::Time t_buff = ros::Time::now();
+      const double NS_IN_MS = 1000000.0;
+      ROS_INFO_STREAM("aravis stream " << stream_id << " " << substream.name <<
+                      " buffer processing time: " <<
+                      (t_buff - t_begin).toNSec() / NS_IN_MS << " ms");
+    #endif
   }
 
-  ROS_INFO_STREAM("Finished thread for stream " << stream_id << " substream " << substream_id);
+  ROS_INFO_STREAM("Finished thread for stream " << stream_id << " " << substream.name);
 }
 
 void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, size_t stream_id)
@@ -1849,40 +1869,32 @@ void CameraAravisNodelet::processChunkDataBuffer(ArvBuffer *p_buffer, size_t str
 
 void CameraAravisNodelet::processMultipartBuffer(ArvBuffer *p_buffer, size_t stream_id)
 {
+  Stream &stream = streams_[stream_id];
+
+  // get the image message which wraps around buffer
+  // this buffer is shared resource for all multiparts
+  // it is from pool on stream level (not substream)
+  sensor_msgs::ImagePtr msg_ptr = (*(stream.p_buffer_pool))[p_buffer];
+
   guint nparts = arv_buffer_get_n_parts(p_buffer);
 
   for(guint i = 0; i < nparts; ++i)
   {
-      size_t dataSize = 0;
-      auto data = arv_buffer_get_part_data(p_buffer, i, &dataSize);
-
-      #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
-        ros::Time t_begin = ros::Time::now();
-      #endif
-
       Substream &substream = streams_[stream_id].substreams[i];
-      {
+
+      { //shared data for substream with substreamThreadMain
         std::lock_guard<std::mutex> lock_guard(substream.buffer_data_mutex);
-        //modify shared data
+        substream.p_buffer = p_buffer;
+        substream.p_buffer_image = msg_ptr;
       }
+      //wake up substream processing thread in substreamThreadMain
       substream.buffer_ready_condition.notify_one();
-
-      processPartBuffer(p_buffer, stream_id, i, data, dataSize);
-
-      #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
-        ros::Time t_buff = ros::Time::now();
-        const double NS_IN_MS = 1000000.0;
-        ROS_INFO_STREAM("aravis stream " << stream_id << " part " << i <<
-                        " buffer processing time: " <<
-                        (t_buff - t_begin).toNSec() / NS_IN_MS << " ms");
-      #endif
   }
 
-  //we are done with multipart buffer
-  //we need to handover buffer to aravis
-  //this is different from Image workflow
-  //where we 1:1 wrap image data with ROS Image
-  arv_stream_push_buffer(streams_[stream_id].p_stream, p_buffer);
+  //multipart buffer ownership is now managed by
+  //substreams through substream.p_buffer_image
+  //it will be returned to aravis when all substreams
+  //are done with processing
 }
 
 void CameraAravisNodelet::processPartBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substream_id, const void* data, size_t size)

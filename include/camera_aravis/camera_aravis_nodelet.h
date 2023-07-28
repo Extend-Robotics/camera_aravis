@@ -125,6 +125,10 @@ private:
     bool buffer_thread_stop;
     std::mutex buffer_data_mutex;
     std::condition_variable buffer_ready_condition;
+
+    //ROS image wrapping around aravis buffer data and correspoding aravis buffer
+    sensor_msgs::ImagePtr p_buffer_image;
+    ArvBuffer *p_buffer;
   };
 
   // a single stream may transfer multiple substreams (multipart/chunked data)
@@ -185,7 +189,7 @@ protected:
   // Buffer Callback Helper
   void newBufferReady(ArvStream *p_stream, size_t stream_id);
 
-  void substreamBufferThreadMain(const int stream_id, const int substream_id);
+  void substreamThreadMain(const int stream_id, const int substream_id);
 
   // Process Validated Buffer
   void processBuffer(ArvBuffer *p_buffer, size_t stream_id);
