@@ -24,8 +24,10 @@
 
 #include <memory>
 #include <unordered_set>
+#include <chrono>
 
-//Gathers stats during encoding and outputs them to console
+//Enable simple buffer processing benchmark output
+//This covers color conversion + ROS publishing + ...
 //#define ARAVIS_BUFFER_PROCESSING_BENCHMARK
 
 #define ROS_ASSERT_ENABLED
@@ -367,6 +369,15 @@ CameraAravisNodelet::~CameraAravisNodelet()
     software_trigger_thread_.join();
 
   for(int i=0; i < streams_.size(); i++)
+    for(int j=0; j < streams_[i].substreams.size(); j++)
+      if(streams_[i].substreams[j].buffer_thread.joinable())
+      {
+        streams_[i].substreams[j].buffer_thread_stop = true;
+        streams_[i].substreams[j].buffer_thread.join();
+        ROS_INFO_STREAM("Joined thread for stream " << i << " substream " << j);
+      }
+
+  for(int i=0; i < streams_.size(); i++)
   {
     guint64 n_completed_buffers = 0;
     guint64 n_failures = 0;
@@ -438,8 +449,13 @@ void CameraAravisNodelet::onInit()
   for(int i = 0; i < num_streams; i++)
   {
     streams_.push_back({nullptr, CameraBufferPool::Ptr() });
+    streams_[i].substreams = std::vector<Substream>(substream_names[i].size());
     for(int j = 0; j < substream_names[i].size();++j)
-      streams_[i].substreams.push_back({{0}, substream_names[i][j], frame_ids[i][j], CameraBufferPool::Ptr()});
+    {
+      Substream &sub = streams_[i].substreams[j];
+      sub.name = substream_names[i][j];
+      sub.frame_id = frame_ids[i][j];
+    }
   }
 
   disableComponents();
@@ -959,14 +975,18 @@ void CameraAravisNodelet::spawnStream()
 
         stream.p_buffer_pool.reset(new CameraBufferPool(stream.p_stream, n_bytes_payload_stream_, 10));
 
-        //create non-aravis buffer pools for multipart part part images recycling
+        
         for(int j=0;j<stream.substreams.size();++j)
-          stream.substreams[j].p_buffer_pool.reset(new CameraBufferPool(nullptr, 0, 0));
-
-        if (arv_camera_is_gv_device(p_camera_))
         {
-          tuneGvStream(reinterpret_cast<ArvGvStream*>(stream.p_stream));
+          //create non-aravis buffer pools for multipart part part images recycling
+          stream.substreams[j].p_buffer_pool.reset(new CameraBufferPool(nullptr, 0, 0));
+          //start substream processing threads
+          stream.substreams[j].buffer_thread = std::thread(&CameraAravisNodelet::substreamThreadMain, this, i, j);
         }
+
+        if (arv_camera_is_gv_device(p_camera_))        
+          tuneGvStream(reinterpret_cast<ArvGvStream*>(stream.p_stream));
+        
         break;
       }
       else
@@ -1728,47 +1748,134 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, size_t stream_id)
   }
 
   // at this point we have a valid buffer to work with
-
-  #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
-    ros::Time t_begin = ros::Time::now();
-  #endif
-
-  processBuffer(p_buffer, stream_id);
-
-  #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
-    ros::Time t_buff = ros::Time::now();
-    const double NS_IN_MS = 1000000.0;
-    ROS_INFO_STREAM("aravis stream " << stream_id <<  " buffer processing time: " <<
-                    (t_buff - t_begin).toNSec() / NS_IN_MS << " ms");
-  #endif
+  delegateBuffer(p_buffer, stream_id);
 }
 
-void CameraAravisNodelet::processBuffer(ArvBuffer *p_buffer, size_t stream_id)
+void CameraAravisNodelet::delegateBuffer(ArvBuffer *p_buffer, size_t stream_id)
 {
   ArvBufferPayloadType payloadType = arv_buffer_get_payload_type(p_buffer);
 
   switch(payloadType)
   {
     case ARV_BUFFER_PAYLOAD_TYPE_IMAGE:
-        return processImageBuffer(p_buffer, stream_id);
-    case ARV_BUFFER_PAYLOAD_TYPE_CHUNK_DATA:
-        return processChunkDataBuffer(p_buffer, stream_id);
+        return delegateBuffer(p_buffer, stream_id, 1);
     case ARV_BUFFER_PAYLOAD_TYPE_MULTIPART:
-        return processMultipartBuffer(p_buffer, stream_id);
+        return delegateBuffer(p_buffer, stream_id, arv_buffer_get_n_parts(p_buffer));
+    case ARV_BUFFER_PAYLOAD_TYPE_CHUNK_DATA:
+        return delegateChunkDataBuffer(p_buffer, stream_id);
     default:
         arv_stream_push_buffer(streams_[stream_id].p_stream, p_buffer);
         ROS_ERROR("Ignoring unsupported buffer type: %d", payloadType);
   }
 }
 
-void CameraAravisNodelet::processImageBuffer(ArvBuffer *p_buffer, size_t stream_id)
+void CameraAravisNodelet::delegateBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substreams)
 {
-  Stream & src = streams_[stream_id];
-  Substream & substream = src.substreams[0];
-  const Sensor & sensor = substream.sensor;
+  Stream &stream = streams_[stream_id];
 
-  // get the image message which wraps around this buffer
-  sensor_msgs::ImagePtr msg_ptr = (*(src.p_buffer_pool))[p_buffer];
+  // get the image message which wraps around buffer
+  // for image payload this maps 1:1 to image data
+  // for multipart payload this is shared resource for all parts
+  // it is from pool on stream level (not substream)
+  sensor_msgs::ImagePtr msg_ptr = (*(stream.p_buffer_pool))[p_buffer];
+
+  for(guint i = 0; i < substreams; ++i)
+  {
+      Substream &substream = streams_[stream_id].substreams[i];
+
+      { //shared data for substream with substreamThreadMain
+        std::lock_guard<std::mutex> lock_guard(substream.buffer_data_mutex);
+
+        if(substream.p_buffer)
+          ROS_WARN_STREAM("Dropped unprocessed data for steam " << stream_id << " " << substream.name);
+
+        substream.p_buffer = p_buffer;
+        substream.p_buffer_image = msg_ptr;
+      }
+      //wake up substream processing thread in substreamThreadMain
+      substream.buffer_ready_condition.notify_one();
+  }
+
+  //buffer ownership is now managed by
+  //substreams through substream.p_buffer_image
+  //it will be returned to aravis when substream(s)
+  //is(are) done with processing
+}
+
+void CameraAravisNodelet::delegateChunkDataBuffer(ArvBuffer *p_buffer, size_t stream_id)
+{
+  ROS_ERROR("Ignoring chunk data buffer - NOT IMPLEMENTED");
+
+  //we are done with chunk data buffer
+  //we need to handover buffer to aravis
+  //this is different from Image workflow
+  //where we 1:1 wrap image data with ROS Image
+  arv_stream_push_buffer(streams_[stream_id].p_stream, p_buffer);
+}
+
+void CameraAravisNodelet::substreamThreadMain(const int stream_id, const int substream_id)
+{
+  using namespace std::chrono_literals;
+
+  Substream &substream = streams_[stream_id].substreams[substream_id];
+
+  ROS_INFO_STREAM("Started thread for stream " << stream_id << " " << substream.name);
+
+  while(!substream.buffer_thread_stop)
+  {
+    std::unique_lock<std::mutex> lock(substream.buffer_data_mutex);
+
+    if(substream.buffer_ready_condition.wait_for(lock, 1000ms) == std::cv_status::timeout)
+    { //check termination conditions
+      if(substream.buffer_thread_stop || !ros::ok())
+        break;
+
+      continue;
+    }
+
+    //we own the lock now and new data is waiting
+    //take ownership of it
+    sensor_msgs::ImagePtr p_buffer_image = substream.p_buffer_image;
+    substream.p_buffer_image.reset();
+
+    ArvBuffer *p_buffer = substream.p_buffer;
+    substream.p_buffer = nullptr;
+
+    //no need to keep the lock for processing time,
+    lock.unlock();
+
+    #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
+      ros::Time t_begin = ros::Time::now();
+    #endif
+
+    ArvBufferPayloadType payloadType = arv_buffer_get_payload_type(p_buffer);
+
+    if(payloadType == ARV_BUFFER_PAYLOAD_TYPE_IMAGE)
+      processImageBuffer(p_buffer, stream_id, p_buffer_image);
+    else if(payloadType == ARV_BUFFER_PAYLOAD_TYPE_MULTIPART)
+      processPartBuffer(p_buffer, stream_id, substream_id);
+    else
+        ROS_ERROR("Ignoring unsupported buffer type: %d", payloadType);
+
+    #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
+      ros::Time t_buff = ros::Time::now();
+      const double NS_IN_MS = 1000000.0;
+      ROS_INFO_STREAM("aravis stream " << stream_id << " " << substream.name <<
+                      " buffer processing time: " <<
+                      (t_buff - t_begin).toNSec() / NS_IN_MS << " ms");
+    #endif
+  }
+
+  ROS_INFO_STREAM("Finished thread for stream " << stream_id << " " << substream.name);
+}
+
+void CameraAravisNodelet::processImageBuffer(ArvBuffer *p_buffer, size_t stream_id, sensor_msgs::ImagePtr &msg_ptr)
+{
+  Stream &src = streams_[stream_id];
+  Substream &substream = src.substreams[0];
+  const Sensor &sensor = substream.sensor;
+
+  //msg_ptr is ROS Image that wraps around aravis p_buffer data
 
   fillImage(msg_ptr, p_buffer, substream.frame_id, sensor);
 
@@ -1790,53 +1897,14 @@ void CameraAravisNodelet::processImageBuffer(ArvBuffer *p_buffer, size_t stream_
     resetPtpClock();
 }
 
-void CameraAravisNodelet::processChunkDataBuffer(ArvBuffer *p_buffer, size_t stream_id)
-{
-  ROS_ERROR("Ignoring chunk data buffer - NOT IMPLEMENTED");
-
-  //we are done with chunk data buffer
-  //we need to handover buffer to aravis
-  //this is different from Image workflow
-  //where we 1:1 wrap image data with ROS Image
-  arv_stream_push_buffer(streams_[stream_id].p_stream, p_buffer);
-}
-
-void CameraAravisNodelet::processMultipartBuffer(ArvBuffer *p_buffer, size_t stream_id)
-{
-  guint nparts = arv_buffer_get_n_parts(p_buffer);
-
-  for(guint i = 0; i < nparts; ++i)
-  {
-      size_t dataSize = 0;
-      auto data = arv_buffer_get_part_data(p_buffer, i, &dataSize);
-
-      #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
-        ros::Time t_begin = ros::Time::now();
-      #endif
-
-      processPartBuffer(p_buffer, stream_id, i, data, dataSize);
-
-      #ifdef ARAVIS_BUFFER_PROCESSING_BENCHMARK
-        ros::Time t_buff = ros::Time::now();
-        const double NS_IN_MS = 1000000.0;
-        ROS_INFO_STREAM("aravis stream " << stream_id << " part " << i <<
-                        " buffer processing time: " <<
-                        (t_buff - t_begin).toNSec() / NS_IN_MS << " ms");
-      #endif
-  }
-
-  //we are done with multipart buffer
-  //we need to handover buffer to aravis
-  //this is different from Image workflow
-  //where we 1:1 wrap image data with ROS Image
-  arv_stream_push_buffer(streams_[stream_id].p_stream, p_buffer);
-}
-
-void CameraAravisNodelet::processPartBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substream_id, const void* data, size_t size)
+void CameraAravisNodelet::processPartBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substream_id)
 {
   Stream & src = streams_[stream_id];
   Substream & substream = src.substreams[substream_id];
   const Sensor & sensor = substream.sensor;
+
+  size_t size = 0;
+  const void* data = arv_buffer_get_part_data(p_buffer, substream_id, &size);
 
   // in multipart path, we can't map 1:1 aravis image with ROS image data
   // but we keep extra buffer pool on substream (part level)

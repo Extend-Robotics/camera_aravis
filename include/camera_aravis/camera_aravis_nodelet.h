@@ -39,6 +39,7 @@ extern "C" {
 #include <memory>
 #include <atomic>
 #include <thread>
+#include <condition_variable>
 #include <chrono>
 #include <unordered_map>
 
@@ -119,6 +120,15 @@ private:
     std::unique_ptr<ros::NodeHandle> p_camera_info_node_handle;
     sensor_msgs::CameraInfoPtr camera_info;
     ros::Publisher extended_camera_info_pub;
+
+    std::thread buffer_thread;
+    bool buffer_thread_stop;
+    std::mutex buffer_data_mutex;
+    std::condition_variable buffer_ready_condition;
+
+    //ROS image wrapping around aravis buffer data and correspoding aravis buffer
+    sensor_msgs::ImagePtr p_buffer_image;
+    ArvBuffer *p_buffer;
   };
 
   // a single stream may transfer multiple substreams (multipart/chunked data)
@@ -179,13 +189,15 @@ protected:
   // Buffer Callback Helper
   void newBufferReady(ArvStream *p_stream, size_t stream_id);
 
-  // Process Validated Buffer
-  void processBuffer(ArvBuffer *p_buffer, size_t stream_id);
+  // Delegate validated buffer to substream(s) thread(s)
+  void delegateBuffer(ArvBuffer *p_buffer, size_t stream_id);
+  void delegateBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substreams);
+  void delegateChunkDataBuffer(ArvBuffer *p_buffer, size_t stream_id);
 
-  void processImageBuffer(ArvBuffer *p_buffer, size_t stream_id);
-  void processChunkDataBuffer(ArvBuffer *p_buffer, size_t stream_id);
-  void processMultipartBuffer(ArvBuffer *p_buffer, size_t stream_id);
-  void processPartBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substream_id, const void* data, size_t size);
+  void substreamThreadMain(const int stream_id, const int substream_id);
+
+  void processImageBuffer(ArvBuffer *p_buffer, size_t stream_id, sensor_msgs::ImagePtr &msg_ptr);
+  void processPartBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substream_id);
 
   void fillImage(const sensor_msgs::ImagePtr &msg_ptr, ArvBuffer *p_buffer, const std::string frame_id, const Sensor& sensor);
   void fillCameraInfo(Substream &substream, const std_msgs::Header &header);
