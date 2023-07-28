@@ -189,14 +189,14 @@ protected:
   // Buffer Callback Helper
   void newBufferReady(ArvStream *p_stream, size_t stream_id);
 
-  // Process Validated Buffer
-  void processBuffer(ArvBuffer *p_buffer, size_t stream_id);
-
-  void processImageBuffer(ArvBuffer *p_buffer, size_t stream_id);
-  void processChunkDataBuffer(ArvBuffer *p_buffer, size_t stream_id);
-  void processMultipartBuffer(ArvBuffer *p_buffer, size_t stream_id);
+  // Delegate validated buffer to substream(s) thread(s)
+  void delegateBuffer(ArvBuffer *p_buffer, size_t stream_id);
+  void delegateBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substreams);
+  void delegateChunkDataBuffer(ArvBuffer *p_buffer, size_t stream_id);
 
   void substreamThreadMain(const int stream_id, const int substream_id);
+
+  void processImageBuffer(ArvBuffer *p_buffer, size_t stream_id, sensor_msgs::ImagePtr &msg_ptr);
   void processPartBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substream_id);
 
   void fillImage(const sensor_msgs::ImagePtr &msg_ptr, ArvBuffer *p_buffer, const std::string frame_id, const Sensor& sensor);
