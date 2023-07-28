@@ -39,6 +39,7 @@ extern "C" {
 #include <memory>
 #include <atomic>
 #include <thread>
+#include <condition_variable>
 #include <chrono>
 #include <unordered_map>
 
@@ -119,6 +120,10 @@ private:
     std::unique_ptr<ros::NodeHandle> p_camera_info_node_handle;
     sensor_msgs::CameraInfoPtr camera_info;
     ros::Publisher extended_camera_info_pub;
+
+    std::thread buffer_thread;
+    //std::mutex buffer_data_mutex;
+    //std::condition_variable buffer_ready_condition;
   };
 
   // a single stream may transfer multiple substreams (multipart/chunked data)
@@ -178,6 +183,8 @@ protected:
 
   // Buffer Callback Helper
   void newBufferReady(ArvStream *p_stream, size_t stream_id);
+
+  void substreamBufferThreadMain(const int stream, const int substream);
 
   // Process Validated Buffer
   void processBuffer(ArvBuffer *p_buffer, size_t stream_id);

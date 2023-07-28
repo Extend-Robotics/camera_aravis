@@ -367,6 +367,14 @@ CameraAravisNodelet::~CameraAravisNodelet()
     software_trigger_thread_.join();
 
   for(int i=0; i < streams_.size(); i++)
+    for(int j=0; j < streams_[i].substreams.size(); j++)
+      if(streams_[i].substreams[j].buffer_thread.joinable())
+      {
+        streams_[i].substreams[j].buffer_thread.join();
+        ROS_INFO_STREAM("Joined thread for stream " << i << " substream " << j);
+      }
+
+  for(int i=0; i < streams_.size(); i++)
   {
     guint64 n_completed_buffers = 0;
     guint64 n_failures = 0;
@@ -959,14 +967,18 @@ void CameraAravisNodelet::spawnStream()
 
         stream.p_buffer_pool.reset(new CameraBufferPool(stream.p_stream, n_bytes_payload_stream_, 10));
 
-        //create non-aravis buffer pools for multipart part part images recycling
+        
         for(int j=0;j<stream.substreams.size();++j)
-          stream.substreams[j].p_buffer_pool.reset(new CameraBufferPool(nullptr, 0, 0));
-
-        if (arv_camera_is_gv_device(p_camera_))
         {
-          tuneGvStream(reinterpret_cast<ArvGvStream*>(stream.p_stream));
+          //create non-aravis buffer pools for multipart part part images recycling
+          stream.substreams[j].p_buffer_pool.reset(new CameraBufferPool(nullptr, 0, 0));
+          //start substream processing threads
+          stream.substreams[j].buffer_thread = std::thread(&CameraAravisNodelet::substreamBufferThreadMain, this, i, j);
         }
+
+        if (arv_camera_is_gv_device(p_camera_))        
+          tuneGvStream(reinterpret_cast<ArvGvStream*>(stream.p_stream));
+        
         break;
       }
       else
@@ -1693,6 +1705,13 @@ void CameraAravisNodelet::newBufferReadyCallback(ArvStream *p_stream, gpointer c
   }
 }
 
+void CameraAravisNodelet::substreamBufferThreadMain(const int stream, const int substream)
+{
+  ROS_INFO_STREAM("Started thread for stream " << stream << " substream " << substream);
+
+  ROS_INFO_STREAM("Finished thread for stream " << stream << " substream " << substream);
+}
+
 void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, size_t stream_id)
 {
   ArvBuffer *p_buffer = arv_stream_try_pop_buffer(p_stream);
@@ -1742,6 +1761,8 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, size_t stream_id)
                     (t_buff - t_begin).toNSec() / NS_IN_MS << " ms");
   #endif
 }
+
+
 
 void CameraAravisNodelet::processBuffer(ArvBuffer *p_buffer, size_t stream_id)
 {
