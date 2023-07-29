@@ -534,7 +534,7 @@ inline void rgb_pixel(uint8_t *rgb, const int y, const int csc_co, const int csc
 {
   if(!y)
   {
-    *rgb = *(rgb+1) = *(rgb+2) = 0;
+    rgb[0] = rgb[1] = rgb[2]= 0;
     return;
   }
 
@@ -548,9 +548,9 @@ inline void rgb_pixel(uint8_t *rgb, const int y, const int csc_co, const int csc
   const uint8_t g = clamp2(csc_g, 0, (int)max) >> maxTo8BitShift;
   const uint8_t b = clamp2(csc_b, 0, (int)max) >> maxTo8BitShift;
 
-  *rgb = r;
-  *(rgb+1) = g;
-  *(rgb+2) = b;
+  rgb[0] = r;
+  rgb[1] = g;
+  rgb[2] = b;
 }
 
 void photoneoYCoCg420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format)
@@ -600,15 +600,15 @@ void photoneoYCoCg420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, con
   {
     for (size_t col = 0; col < cols; col += 2)
     {
-        const uint16_t y00 = *ycocg >> YSHIFT;
-        const uint16_t y01 = *(ycocg+1) >> YSHIFT;
+        const uint16_t y00 = ycocg[0] >> YSHIFT;
+        const uint16_t y01 = ycocg[1] >> YSHIFT;
 
-        const uint16_t y10 = *(ycocg+cols) >> YSHIFT;
-        const uint16_t y11 = *(ycocg+cols+1) >> YSHIFT;
+        const uint16_t y10 = ycocg[cols] >> YSHIFT;
+        const uint16_t y11 = ycocg[cols+1] >> YSHIFT;
         // reconstruct Co value from 4:2:0 subsampling
-        const uint16_t co = ((*ycocg & mask) << YSHIFT) + (*(ycocg+1) & mask);
+        const uint16_t co = ((ycocg[0] & mask) << YSHIFT) + (ycocg[1] & mask);
         // reconstruct Cg value from 4:2:0 subsampling
-        const uint16_t cg = ((*(ycocg+cols) & mask) << YSHIFT) + (*(ycocg+cols + 1) & mask);
+        const uint16_t cg = ((ycocg[cols] & mask) << YSHIFT) + (ycocg[cols + 1] & mask);
 
         // Note: We employ neareast neighbor interpolation for the subsampled Co, Cg channels.
         //       It's possible to implement bilinear interpolation in those channels.
