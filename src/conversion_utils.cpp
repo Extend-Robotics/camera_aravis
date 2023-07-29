@@ -530,7 +530,7 @@ namespace photoneo
 const uint16_t max = 1023;
 const uint16_t maxTo8BitShift = 2; //1023 max, we want max 255
 
-inline void rgb_pixel(uint8_t *rgb, const int y, const int csc_co, const int csc_cg)
+inline void ycocgr_to_rgb(uint8_t *rgb, const int y, const int csc_co, const int csc_cg)
 {
   if(!y)
   {
@@ -616,10 +616,10 @@ void photoneoYCoCg420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, con
         const int csc_co = co - (1 << BITS_PER_COMPONENT);
         const int csc_cg = cg - (1 << BITS_PER_COMPONENT);
 
-        rgb_pixel(rgb, y00, csc_co, csc_cg);
-        rgb_pixel(rgb+pixel_offset, y01, csc_co, csc_cg);
-        rgb_pixel(rgb+rgb_stride, y10, csc_co, csc_cg);
-        rgb_pixel(rgb+rgb_stride + pixel_offset, y11, csc_co, csc_cg);
+        ycocgr_to_rgb(rgb, y00, csc_co, csc_cg);
+        ycocgr_to_rgb(rgb+pixel_offset, y01, csc_co, csc_cg);
+        ycocgr_to_rgb(rgb+rgb_stride, y10, csc_co, csc_cg);
+        ycocgr_to_rgb(rgb+rgb_stride + pixel_offset, y11, csc_co, csc_cg);
 
         ycocg += 2;
         rgb += 2*pixel_offset;
