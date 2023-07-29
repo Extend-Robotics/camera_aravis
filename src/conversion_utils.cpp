@@ -527,11 +527,14 @@ namespace photoneo
  * @see https://github.com/photoneo-3d/photoneo-cpp-examples/blob/main/GigEV/aravis/common/YCoCg.h
  */
 
-const uint16_t max = 1023;
-const uint16_t maxTo8BitShift = 2; //1023 max, we want max 255
-
 inline void ycocgr_to_rgb(uint8_t *rgb, const int y, const int csc_co, const int csc_cg)
 {
+  const int MAX_10BIT = 1023;
+  const uint16_t MAX_10BIT_TO_8BIT_SHIFT = 2; //scale 0-1023 to 0-255 by right shift (division by 4)
+
+  //Photoneo specific:
+  //Black pixels are treated specially in order to prevent
+  //artifacts in images containing valid pixels only in a subregion
   if(!y)
   {
     rgb[0] = rgb[1] = rgb[2]= 0;
@@ -544,16 +547,12 @@ inline void ycocgr_to_rgb(uint8_t *rgb, const int y, const int csc_co, const int
   const int csc_b = t - (csc_co >> 1);
   const int csc_r = csc_co + csc_b;
 
-  const uint8_t r = clamp2(csc_r, 0, (int)max) >> maxTo8BitShift;
-  const uint8_t g = clamp2(csc_g, 0, (int)max) >> maxTo8BitShift;
-  const uint8_t b = clamp2(csc_b, 0, (int)max) >> maxTo8BitShift;
-
-  rgb[0] = r;
-  rgb[1] = g;
-  rgb[2] = b;
+  rgb[0] = clamp2(csc_r, 0, MAX_10BIT) >> MAX_10BIT_TO_8BIT_SHIFT;
+  rgb[1] = clamp2(csc_g, 0, MAX_10BIT) >> MAX_10BIT_TO_8BIT_SHIFT;
+  rgb[2] = clamp2(csc_b, 0, MAX_10BIT) >> MAX_10BIT_TO_8BIT_SHIFT;
 }
 
-void photoneoYCoCg420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format)
+void photoneoYCoCgR420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format)
 {
   if (!in)
   {
@@ -580,52 +579,53 @@ void photoneoYCoCg420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, con
   out->step = out->width * sizeof(photoneo::RGBType);
   out->data.resize(out->height * out->step);
 
-  const uint16_t BITS_PER_COMPONENT=10;
-  const uint16_t YSHIFT=6;
+  const uint16_t BITS_PER_COMPONENT=10; //bit depth of Y; Co and Cg have 1 extra bit
+  const uint16_t YSHIFT=6; //10 bits used by Y, 6 bits used by Co/Cg
 
-  const uint16_t maxTo8BitDiv = 4; //1023 max, we want max 255
-  const uint16_t maxTo8BitShift = 2; //1023 max, we want max 255
+  const size_t ROWS = in->height;
+  const size_t COLS = in->width;
+  const size_t RGB_PIXEL_OFFSET = 3;
+  const size_t RGB_STRIDE = out->step;
 
-  const size_t rows = in->height;
-  const size_t cols = in->width;
-  const size_t pixel_offset = 3;
-  const size_t rgb_stride = out->step;
-
-  const uint16_t mask = static_cast<uint16_t>((1 << YSHIFT) - 1); //low order 6 bits
+  const uint16_t COCG_MASK = static_cast<uint16_t>((1 << YSHIFT) - 1); //low order 6 bits
 
   uint16_t *ycocg = (uint16_t*)in->data.data();
   uint8_t *rgb = out->data.data();
 
-  for (size_t row = 0; row < rows; row += 2)
+  for (size_t row = 0; row < ROWS; row += 2)
   {
-    for (size_t col = 0; col < cols; col += 2)
+    for (size_t col = 0; col < COLS; col += 2)
     {
+        //readout Y values from 2x2 pixel group
         const uint16_t y00 = ycocg[0] >> YSHIFT;
         const uint16_t y01 = ycocg[1] >> YSHIFT;
+        const uint16_t y10 = ycocg[COLS] >> YSHIFT;
+        const uint16_t y11 = ycocg[COLS+1] >> YSHIFT;
 
-        const uint16_t y10 = ycocg[cols] >> YSHIFT;
-        const uint16_t y11 = ycocg[cols+1] >> YSHIFT;
         // reconstruct Co value from 4:2:0 subsampling
-        const uint16_t co = ((ycocg[0] & mask) << YSHIFT) + (ycocg[1] & mask);
+        const uint16_t co = ((ycocg[0] & COCG_MASK) << YSHIFT) | (ycocg[1] & COCG_MASK);
         // reconstruct Cg value from 4:2:0 subsampling
-        const uint16_t cg = ((ycocg[cols] & mask) << YSHIFT) + (ycocg[cols + 1] & mask);
+        const uint16_t cg = ((ycocg[COLS] & COCG_MASK) << YSHIFT) | (ycocg[COLS + 1] & COCG_MASK);
 
-        // Note: We employ neareast neighbor interpolation for the subsampled Co, Cg channels.
-        //       It's possible to implement bilinear interpolation in those channels.
-
+        // Co, Cg shared by 2x2 pixel group here but
+        // it's possible to implement bilinear interpolation
         const int csc_co = co - (1 << BITS_PER_COMPONENT);
         const int csc_cg = cg - (1 << BITS_PER_COMPONENT);
 
+        // transfer YCoCg-R to RGB
         ycocgr_to_rgb(rgb, y00, csc_co, csc_cg);
-        ycocgr_to_rgb(rgb+pixel_offset, y01, csc_co, csc_cg);
-        ycocgr_to_rgb(rgb+rgb_stride, y10, csc_co, csc_cg);
-        ycocgr_to_rgb(rgb+rgb_stride + pixel_offset, y11, csc_co, csc_cg);
+        ycocgr_to_rgb(rgb + RGB_PIXEL_OFFSET, y01, csc_co, csc_cg);
+        ycocgr_to_rgb(rgb + RGB_STRIDE, y10, csc_co, csc_cg);
+        ycocgr_to_rgb(rgb + RGB_STRIDE + RGB_PIXEL_OFFSET, y11, csc_co, csc_cg);
 
+        //move to next 2x2 pixel group
         ycocg += 2;
-        rgb += 2*pixel_offset;
+        rgb += 2*RGB_PIXEL_OFFSET;
     }
-    ycocg += cols;
-    rgb += rgb_stride;
+    //one row was passed in nested loop above
+    //move second row for next 2x2 like row
+    ycocg += COLS;
+    rgb += RGB_STRIDE;
   }
 
   out->encoding = out_format;
