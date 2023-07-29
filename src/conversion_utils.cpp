@@ -526,7 +526,112 @@ namespace photoneo
  * @see https://en.wikipedia.org/wiki/YCoCg
  * @see https://github.com/photoneo-3d/photoneo-cpp-examples/blob/main/GigEV/aravis/common/YCoCg.h
  */
+
+const uint16_t max = 1023;
+const uint16_t maxTo8BitShift = 2; //1023 max, we want max 255
+
+inline void rgb_pixel(uint8_t *rgb, const int y, const int csc_co, const int csc_cg)
+{
+  if(!y)
+  {
+    *rgb = *(rgb+1) = *(rgb+2) = 0;
+    return;
+  }
+
+  const int t = y - (csc_cg >> 1);
+
+  const int csc_g = csc_cg + t;
+  const int csc_b = t - (csc_co >> 1);
+  const int csc_r = csc_co + csc_b;
+
+  const uint8_t r = clamp2(csc_r, 0, (int)max) >> maxTo8BitShift;
+  const uint8_t g = clamp2(csc_g, 0, (int)max) >> maxTo8BitShift;
+  const uint8_t b = clamp2(csc_b, 0, (int)max) >> maxTo8BitShift;
+
+  *rgb = r;
+  *(rgb+1) = g;
+  *(rgb+2) = b;
+}
+
 void photoneoYCoCg420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format)
+{
+  if (!in)
+  {
+    ROS_WARN("camera_aravis::photoneoMotionCamYCoCg(): no input image given.");
+    return;
+  }
+
+  if (in->encoding != "Mono16")
+  {
+    ROS_WARN("camera_aravis::photoneoMotionCamYCoCg(): expects Mono16 encoded custom YCoCg 4:2:0 subsampled data.");
+    return;
+  }
+
+  if (!out)
+  {
+    out.reset(new sensor_msgs::Image);
+    ROS_INFO("camera_aravis::photoneoMotionCamYCoCg(): no output image given. Reserved a new one.");
+  }
+
+  out->header = in->header;
+  out->height = in->height;
+  out->width = in->width;
+  out->is_bigendian = in->is_bigendian;
+  out->step = out->width * sizeof(photoneo::RGBType);
+  out->data.resize(out->height * out->step);
+
+  const uint16_t BITS_PER_COMPONENT=10;
+  const uint16_t YSHIFT=6;
+
+  const uint16_t maxTo8BitDiv = 4; //1023 max, we want max 255
+  const uint16_t maxTo8BitShift = 2; //1023 max, we want max 255
+
+  const size_t rows = in->height;
+  const size_t cols = in->width;
+  const size_t pixel_offset = 3;
+  const size_t rgb_stride = out->step;
+
+  const uint16_t mask = static_cast<uint16_t>((1 << YSHIFT) - 1); //low order 6 bits
+
+  uint16_t *ycocg = (uint16_t*)in->data.data();
+  uint8_t *rgb = out->data.data();
+
+  for (size_t row = 0; row < rows; row += 2)
+  {
+    for (size_t col = 0; col < cols; col += 2)
+    {
+        const uint16_t y00 = *ycocg >> YSHIFT;
+        const uint16_t y01 = *(ycocg+1) >> YSHIFT;
+
+        const uint16_t y10 = *(ycocg+cols) >> YSHIFT;
+        const uint16_t y11 = *(ycocg+cols+1) >> YSHIFT;
+        // reconstruct Co value from 4:2:0 subsampling
+        const uint16_t co = ((*ycocg & mask) << YSHIFT) + (*(ycocg+1) & mask);
+        // reconstruct Cg value from 4:2:0 subsampling
+        const uint16_t cg = ((*(ycocg+cols) & mask) << YSHIFT) + (*(ycocg+cols + 1) & mask);
+
+        // Note: We employ neareast neighbor interpolation for the subsampled Co, Cg channels.
+        //       It's possible to implement bilinear interpolation in those channels.
+
+        const int csc_co = co - (1 << BITS_PER_COMPONENT);
+        const int csc_cg = cg - (1 << BITS_PER_COMPONENT);
+
+        rgb_pixel(rgb, y00, csc_co, csc_cg);
+        rgb_pixel(rgb+pixel_offset, y01, csc_co, csc_cg);
+        rgb_pixel(rgb+rgb_stride, y10, csc_co, csc_cg);
+        rgb_pixel(rgb+rgb_stride + pixel_offset, y11, csc_co, csc_cg);
+
+        ycocg += 2;
+        rgb += 2*pixel_offset;
+    }
+    ycocg += cols;
+    rgb += rgb_stride;
+  }
+
+  out->encoding = out_format;
+}
+
+void photoneoYCoCg420_bak(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format)
 {
   if (!in)
   {
