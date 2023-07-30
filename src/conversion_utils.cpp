@@ -527,7 +527,17 @@ namespace photoneo
  * @see https://github.com/photoneo-3d/photoneo-cpp-examples/blob/main/GigEV/aravis/common/YCoCg.h
  */
 
-inline void ycocgr_to_rgb(uint8_t *rgb, const int y, const int csc_co, const int csc_cg)
+
+static inline int clamp2(int x, const int min, const int max)
+{
+  if (x < min) x = min;
+  if (x > max) x = max;
+  return x;
+}
+
+//y positive,  e.g. for 10 bit in [0,1024)
+//csc_co and csc_cg centered around zero, e.g. for 10+1 bit in [-1024, 1024)
+static inline void ycocgr_to_rgb(uint8_t *rgb, const int y, const int csc_co, const int csc_cg)
 {
   const int MAX_10BIT = 1023;
   const uint16_t MAX_10BIT_TO_8BIT_SHIFT = 2; //scale 0-1023 to 0-255 by right shift (division by 4)
@@ -579,7 +589,7 @@ void photoneoYCoCgR420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, co
   out->step = out->width * sizeof(photoneo::RGBType);
   out->data.resize(out->height * out->step);
 
-  const uint16_t BITS_PER_COMPONENT=10; //bit depth of Y; Co and Cg have 1 extra bit
+  const uint16_t BITS_PER_COMPONENT=10; //bit depth of Y while Co and Cg have 1 extra bit
   const uint16_t YSHIFT=6; //10 bits used by Y, 6 bits used by Co/Cg
 
   const size_t ROWS = in->height;
@@ -609,6 +619,10 @@ void photoneoYCoCgR420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, co
 
         // Co, Cg shared by 2x2 pixel group here but
         // it's possible to implement bilinear interpolation
+
+        // re-center BITS_PER_COMPONENT+1 bit Co and Cg around 0
+        // e.g. 11 bit unsingned in [0, 2048)
+        // to   11 bit signed    in [-1024, 1024)
         const int csc_co = co - (1 << BITS_PER_COMPONENT);
         const int csc_cg = cg - (1 << BITS_PER_COMPONENT);
 

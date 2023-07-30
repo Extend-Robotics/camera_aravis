@@ -58,14 +58,6 @@ void float_to_uint(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const 
 //// Quirk pixel formats that are not defined in GenICam/GigE-Vision and come disguised as other format
 void photoneoYCoCgR420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format);
 
-template <typename t>
-t clamp2(t x, t min, t max)
-{
-  if (x < min) x = min;
-  if (x > max) x = max;
-  return x;
-}
-
 const std::map<std::string, ConversionFunction> CONVERSIONS_DICTIONARY =
 {
  // equivalent to official ROS color encodings
