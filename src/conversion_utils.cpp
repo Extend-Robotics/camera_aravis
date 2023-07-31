@@ -474,42 +474,9 @@ void float_to_uint(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const 
   out->encoding = out_format;
 }
 
-namespace photoneo
-{
-  // Pixel depth of B, G, R, and Y channels. Chromatic channels Co and Cg have an additional bit.
-  const int PIXEL_DEPTH = 10;
-
-  using ChannelType = std::uint16_t;
-  using YCoCgType = ChannelType;
-  using RGBType = cv::Vec<std::uint8_t, 3>;
-
-  static RGBType photoneoYCoCgPixelRGB(const ChannelType y, const ChannelType co, const ChannelType cg)
-  {
-      if (y == ChannelType(0))
-          return {0, 0, 0};
-
-      const ChannelType delta = (1 << (PIXEL_DEPTH - 1)); // 2^9
-      const ChannelType maxValue = 2 * delta - 1; //2^10 - 1 = 1023
-      const ChannelType maxTo8BitDiv = 4; //1023 max, we want max 255
-
-      ChannelType r1 = 2 * y + co;
-      ChannelType r = r1 > cg ? (r1 - cg) / 2 : ChannelType(0);
-      ChannelType g1 = y + cg / 2;
-      ChannelType g = g1 > delta ? (g1 - delta) : ChannelType(0);
-      ChannelType b1 = y + 2 * delta;
-      ChannelType b2 = (co + cg) / 2;
-      ChannelType b = b1 > b2 ? (b1 - b2) : ChannelType(0);
-
-      return {(uint8_t)(std::min(r, maxValue) / maxTo8BitDiv),
-              (uint8_t)(std::min(g, maxValue) / maxTo8BitDiv),
-              (uint8_t)(std::min(b, maxValue) / maxTo8BitDiv)};
-  }
-
-} //namespace photoneo
-
 /**
  * Provides conversion
- *     BGR  <-- YCoCg 4:2:0,
+ * YCoCg-R 4:2:0 --> RGB8,
  * where the chromatic channels Co, Cg are subsampled in half resolution.
  * The 2x2 plaquette of the YCoCg format consists of:
  *   (0, 0): Y (10 bits), 1st half of Co (6 bits)
@@ -517,13 +484,19 @@ namespace photoneo
  *   (0, 1): Y (10 bits), 1st half of Cg (6 bits)
  *   (1, 1): Y (10 bits), 2nd half of Cg (6 bits)
  *
+ * Y is 10 bit
+ * Co, Cg are 11 bit
+ *
+ * Implements conversion as in VESA-DSC-1.2 7.7 Color Space Conversion
+ * - convert_rgb = 1
+ * - bits_per_component = 10
+ *
+ * The 10 bit output RGB is scaled to 8 bit RGB
+ *
  * Black pixels are treated specially in order to prevent artifacts in images containing valid pixels only in a subregion.
  *
- * NOTE: The YCoCg format used here differs from the reference by:
- *        - a factor 2 in the both chromatic channels Co, Cg,
- *        - an offset equal to the saturation value, which is added to Co and Cg to prevent negative values.
- *
  * @see https://en.wikipedia.org/wiki/YCoCg
+ * @see https://glenwing.github.io/docs/VESA-DSC-1.2.pdf
  * @see https://github.com/photoneo-3d/photoneo-cpp-examples/blob/main/GigEV/aravis/common/YCoCg.h
  */
 
@@ -557,6 +530,8 @@ static inline void ycocgr_to_rgb(uint8_t *rgb, const int y, const int csc_co, co
   const int csc_b = t - (csc_co >> 1);
   const int csc_r = csc_co + csc_b;
 
+  //The final scaling from 10 bit to 8 bit is deviation from
+  //Photoneo sample behavior but we want 8 bit per pixel RGB
   rgb[0] = clamp2(csc_r, 0, MAX_10BIT) >> MAX_10BIT_TO_8BIT_SHIFT;
   rgb[1] = clamp2(csc_g, 0, MAX_10BIT) >> MAX_10BIT_TO_8BIT_SHIFT;
   rgb[2] = clamp2(csc_b, 0, MAX_10BIT) >> MAX_10BIT_TO_8BIT_SHIFT;
@@ -582,24 +557,23 @@ void photoneoYCoCgR420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, co
     ROS_INFO("camera_aravis::photoneoMotionCamYCoCg(): no output image given. Reserved a new one.");
   }
 
+  const uint16_t BITS_PER_COMPONENT=10; //bit depth of Y while Co and Cg have 1 extra bit
+  const uint16_t YSHIFT=6; //10 bits used by Y, 6 bits used by Co/Cg
+  const uint16_t COCG_MASK = (uint16_t)((1 << YSHIFT) - 1); //low order 6 bits
+  const size_t RGB_PIXEL_OFFSET = 3; //8 bit-per-pixel RGB
+
   out->header = in->header;
   out->height = in->height;
   out->width = in->width;
   out->is_bigendian = in->is_bigendian;
-  out->step = out->width * sizeof(photoneo::RGBType);
+  out->step = out->width * sizeof(RGB_PIXEL_OFFSET);
   out->data.resize(out->height * out->step);
-
-  const uint16_t BITS_PER_COMPONENT=10; //bit depth of Y while Co and Cg have 1 extra bit
-  const uint16_t YSHIFT=6; //10 bits used by Y, 6 bits used by Co/Cg
 
   const size_t ROWS = in->height;
   const size_t COLS = in->width;
-  const size_t RGB_PIXEL_OFFSET = 3;
   const size_t RGB_STRIDE = out->step;
 
-  const uint16_t COCG_MASK = static_cast<uint16_t>((1 << YSHIFT) - 1); //low order 6 bits
-
-  uint16_t *ycocg = (uint16_t*)in->data.data();
+  const uint16_t *ycocg = (uint16_t*)in->data.data();
   uint8_t *rgb = out->data.data();
 
   for (size_t row = 0; row < ROWS; row += 2)
@@ -641,66 +615,6 @@ void photoneoYCoCgR420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, co
     ycocg += COLS;
     rgb += RGB_STRIDE;
   }
-
-  out->encoding = out_format;
-}
-
-void photoneoYCoCg420_bak(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format)
-{
-  if (!in)
-  {
-    ROS_WARN("camera_aravis::photoneoMotionCamYCoCg(): no input image given.");
-    return;
-  }
-
-  if (in->encoding != "Mono16")
-  {
-    ROS_WARN("camera_aravis::photoneoMotionCamYCoCg(): expects Mono16 encoded custom YCoCg 4:2:0 subsampled data.");
-    return;
-  }
-
-  if (!out)
-  {
-    out.reset(new sensor_msgs::Image);
-    ROS_INFO("camera_aravis::photoneoMotionCamYCoCg(): no output image given. Reserved a new one.");
-  }
-
-  out->header = in->header;
-  out->height = in->height;
-  out->width = in->width;
-  out->is_bigendian = in->is_bigendian;
-  out->step = out->width * sizeof(photoneo::RGBType);
-  out->data.resize(out->height * out->step);
-
-  using namespace photoneo;
-
-  const int yShift = std::numeric_limits<ChannelType>::digits - PIXEL_DEPTH; //16 - 10 = 6
-  const ChannelType mask = static_cast<ChannelType>((1 << yShift) - 1); //low order 6 bits
-
-  //wrap around input ROS Image data from buffer pool
-  cv::Mat_<YCoCgType> ycocgImg(in->height, in->width, (YCoCgType*)in->data.data(), in->step);
-
-  //wrap around output ROS Image data from buffer pool
-  cv::Mat_<RGBType> rgbImg(ycocgImg.rows, ycocgImg.cols, (RGBType*)out->data.data(), out->step);
-
-  for (int row = 0; row < ycocgImg.rows; row += 2)
-      for (int col = 0; col < ycocgImg.cols; col += 2)
-      {
-          const ChannelType y00 = ycocgImg(row, col) >> yShift; //extract Y value (6 bit shift)
-          const ChannelType y01 = ycocgImg(row, col + 1) >> yShift;
-          const ChannelType y10 = ycocgImg(row + 1, col) >> yShift;
-          const ChannelType y11 = ycocgImg(row + 1, col + 1) >> yShift;
-          // reconstruct Co value from 4:2:0 subsampling
-          const ChannelType co = ((ycocgImg(row, col) & mask) << yShift) + (ycocgImg(row, col + 1) & mask);
-          // reconstruct Cg value from 4:2:0 subsampling
-          const ChannelType cg = ((ycocgImg(row + 1, col) & mask) << yShift) + (ycocgImg(row + 1, col + 1) & mask);
-          // Note: We employ neareast neighbor interpolation for the subsampled Co, Cg channels.
-          //       It's possible to implement bilinear interpolation in those channels.
-          rgbImg(row, col)         = photoneoYCoCgPixelRGB(y00, co, cg);
-          rgbImg(row, col + 1)     = photoneoYCoCgPixelRGB(y01, co, cg);
-          rgbImg(row + 1, col)     = photoneoYCoCgPixelRGB(y10, co, cg);
-          rgbImg(row + 1, col + 1) = photoneoYCoCgPixelRGB(y11, co, cg);
-      }
 
   out->encoding = out_format;
 }
