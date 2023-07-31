@@ -56,7 +56,7 @@ void unpack565pImg(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const 
 //// Data adapters
 void float_to_uint(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const float scale, const std::string out_format);
 //// Quirk pixel formats that are not defined in GenICam/GigE-Vision and come disguised as other format
-void photoneoYCoCg420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format);
+void photoneoYCoCgR420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format);
 
 const std::map<std::string, ConversionFunction> CONVERSIONS_DICTIONARY =
 {
@@ -163,7 +163,7 @@ const std::map<std::string, ConversionFunction> CONVERSIONS_DICTIONARY =
  //// data adapters
  { "FloatToUint", std::bind(&float_to_uint, std::placeholders::_1, std::placeholders::_2, 1.0f, sensor_msgs::image_encodings::TYPE_16UC1) },
  //// crazy internal pixel formats fixing various device quirks
- { "PhotoneoYCoCg420", std::bind(&photoneoYCoCg420, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::RGB8) }
+ { "PhotoneoYCoCg420", std::bind(&photoneoYCoCgR420, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::BGRA8) }
 };
 
 } // end namespace camera_aravis
