@@ -510,9 +510,10 @@ static inline int clamp2(int x, const int min, const int max)
 
 //y positive,  e.g. for 10 bit in [0,1024)
 //csc_co and csc_cg centered around zero, e.g. for 10+1 bit in [-1024, 1024)
-static inline void ycocgr_to_rgb(uint8_t *rgb, const int y, const int csc_co, const int csc_cg)
+static inline void ycocgr_to_rgba(uint8_t *rgb, const int y, const int csc_co, const int csc_cg)
 {
   const int MAX_10BIT = 1023;
+  const int MAX_8BIT = 255;
   const uint16_t MAX_10BIT_TO_8BIT_SHIFT = 2; //scale 0-1023 to 0-255 by right shift (division by 4)
 
   //Photoneo specific:
@@ -520,7 +521,7 @@ static inline void ycocgr_to_rgb(uint8_t *rgb, const int y, const int csc_co, co
   //artifacts in images containing valid pixels only in a subregion
   if(!y)
   {
-    rgb[0] = rgb[1] = rgb[2]= 0;
+    rgb[0] = rgb[1] = rgb[2] = rgb[3] = 0;
     return;
   }
 
@@ -532,9 +533,10 @@ static inline void ycocgr_to_rgb(uint8_t *rgb, const int y, const int csc_co, co
 
   //The final scaling from 10 bit to 8 bit is deviation from
   //Photoneo sample behavior but we want 8 bit per pixel RGB
-  rgb[0] = clamp2(csc_r, 0, MAX_10BIT) >> MAX_10BIT_TO_8BIT_SHIFT;
+  rgb[0] = clamp2(csc_b, 0, MAX_10BIT) >> MAX_10BIT_TO_8BIT_SHIFT;
   rgb[1] = clamp2(csc_g, 0, MAX_10BIT) >> MAX_10BIT_TO_8BIT_SHIFT;
-  rgb[2] = clamp2(csc_b, 0, MAX_10BIT) >> MAX_10BIT_TO_8BIT_SHIFT;
+  rgb[2] = clamp2(csc_r, 0, MAX_10BIT) >> MAX_10BIT_TO_8BIT_SHIFT;
+  rgb[3] = MAX_8BIT; //alpha channel
 }
 
 void photoneoYCoCgR420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format)
@@ -560,7 +562,7 @@ void photoneoYCoCgR420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, co
   const uint16_t BITS_PER_COMPONENT=10; //bit depth of Y while Co and Cg have 1 extra bit
   const uint16_t YSHIFT=6; //10 bits used by Y, 6 bits used by Co/Cg
   const uint16_t COCG_MASK = (uint16_t)((1 << YSHIFT) - 1); //low order 6 bits
-  const size_t RGB_PIXEL_OFFSET = 3; //8 bit-per-pixel RGB
+  const size_t RGB_PIXEL_OFFSET = 4; //8 bit-per-pixel RGBA (RGB0)
 
   out->header = in->header;
   out->height = in->height;
@@ -601,10 +603,10 @@ void photoneoYCoCgR420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, co
         const int csc_cg = cg - (1 << BITS_PER_COMPONENT);
 
         // transfer YCoCg-R to RGB
-        ycocgr_to_rgb(rgb, y00, csc_co, csc_cg);
-        ycocgr_to_rgb(rgb + RGB_PIXEL_OFFSET, y01, csc_co, csc_cg);
-        ycocgr_to_rgb(rgb + RGB_STRIDE, y10, csc_co, csc_cg);
-        ycocgr_to_rgb(rgb + RGB_STRIDE + RGB_PIXEL_OFFSET, y11, csc_co, csc_cg);
+        ycocgr_to_rgba(rgb, y00, csc_co, csc_cg);
+        ycocgr_to_rgba(rgb + RGB_PIXEL_OFFSET, y01, csc_co, csc_cg);
+        ycocgr_to_rgba(rgb + RGB_STRIDE, y10, csc_co, csc_cg);
+        ycocgr_to_rgba(rgb + RGB_STRIDE + RGB_PIXEL_OFFSET, y11, csc_co, csc_cg);
 
         //move to next 2x2 pixel group
         ycocg += 2;
