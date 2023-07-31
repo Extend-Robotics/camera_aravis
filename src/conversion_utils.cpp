@@ -566,7 +566,7 @@ void photoneoYCoCgR420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, co
   out->height = in->height;
   out->width = in->width;
   out->is_bigendian = in->is_bigendian;
-  out->step = out->width * sizeof(RGB_PIXEL_OFFSET);
+  out->step = out->width * RGB_PIXEL_OFFSET;
   out->data.resize(out->height * out->step);
 
   const size_t ROWS = in->height;
