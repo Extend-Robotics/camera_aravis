@@ -500,8 +500,8 @@ void float_to_uint(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const 
  * @see https://github.com/photoneo-3d/photoneo-cpp-examples/blob/main/GigEV/aravis/common/YCoCg.h
  */
 
-
-static inline int clamp2(int x, const int min, const int max)
+//optimizes to branchless construct
+static inline int16_t clamp2(int16_t x, const int16_t min, const int16_t max)
 {
   if (x < min) x = min;
   if (x > max) x = max;
@@ -510,26 +510,17 @@ static inline int clamp2(int x, const int min, const int max)
 
 //y positive,  e.g. for 10 bit in [0,1024)
 //csc_co and csc_cg centered around zero, e.g. for 10+1 bit in [-1024, 1024)
-static inline void ycocgr_to_bgra8(uint8_t *bgra, const int y, const int csc_co, const int csc_cg)
+static inline void ycocgr_to_bgra8(uint8_t *bgra, const int16_t y, const int16_t csc_co, const int16_t csc_cg)
 {
-  const int MAX_10BIT = 1023;
-  const int MAX_8BIT = 255;
+  const int16_t MAX_10BIT = 1023;
+  const uint8_t MAX_8BIT = 255;
   const uint16_t MAX_10BIT_TO_8BIT_SHIFT = 2; //scale 0-1023 to 0-255 by right shift (division by 4)
 
-  //Photoneo specific:
-  //Black pixels are treated specially in order to prevent
-  //artifacts in images containing valid pixels only in a subregion
-  if(!y)
-  {
-    bgra[0] = bgra[1] = bgra[2] = bgra[3] = 0;
-    return;
-  }
+  const int16_t t = y - (csc_cg >> 1);
 
-  const int t = y - (csc_cg >> 1);
-
-  const int csc_g = csc_cg + t;
-  const int csc_b = t - (csc_co >> 1);
-  const int csc_r = csc_co + csc_b;
+  const int16_t csc_g = csc_cg + t;
+  const int16_t csc_b = t - (csc_co >> 1);
+  const int16_t csc_r = csc_co + csc_b;
 
   //The final scaling from 10 bit to 8 bit is deviation from
   //Photoneo sample behavior but we want 8 bit per pixel RGB
@@ -537,6 +528,15 @@ static inline void ycocgr_to_bgra8(uint8_t *bgra, const int y, const int csc_co,
   bgra[1] = clamp2(csc_g, 0, MAX_10BIT) >> MAX_10BIT_TO_8BIT_SHIFT;
   bgra[2] = clamp2(csc_r, 0, MAX_10BIT) >> MAX_10BIT_TO_8BIT_SHIFT;
   bgra[3] = MAX_8BIT; //alpha channel
+
+  //Photoneo specific:
+  //Black pixels are treated specially in order to prevent
+  //artifacts in images containing valid pixels only in a subregion
+
+  //Has to be written this way to enable gcc autovectorization
+  //Do not change or move to beginning with return statement
+  if(!y)
+    bgra[0] = 0, bgra[1] = 0, bgra[2] = 0, bgra[3] = 0;
 }
 
 void photoneoYCoCgR420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format)
@@ -599,8 +599,8 @@ void photoneoYCoCgR420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, co
         // re-center BITS_PER_COMPONENT+1 bit Co and Cg around 0
         // e.g. 11 bit unsingned in [0, 2048)
         // to   11 bit signed    in [-1024, 1024)
-        const int csc_co = co - (1 << BITS_PER_COMPONENT);
-        const int csc_cg = cg - (1 << BITS_PER_COMPONENT);
+        const int16_t csc_co = co - (1 << BITS_PER_COMPONENT);
+        const int16_t csc_cg = cg - (1 << BITS_PER_COMPONENT);
 
         // transfer YCoCg-R to BGRA8
         ycocgr_to_bgra8(bgra, y00, csc_co, csc_cg);

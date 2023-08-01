@@ -5,7 +5,13 @@ project(camera_aravis)
 ## Enable simple buffer processing benchmark output
 #add_compile_definitions(ARAVIS_BUFFER_PROCESSING_BENCHMARK)
 
+## Enable native optimizations & vectorization
+## The generated code may not be portable to different archs
+## Use only when deploying on particular hardware
+#set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -fopt-info-vec-optimized -mavx")
+
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules)
+
 
 if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
   message("${PROJECT_NAME}: You did not request a specific build type: selecting 'Release'.")
