@@ -487,17 +487,25 @@ void float_to_uint(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const 
  * Y is 10 bit
  * Co, Cg are 11 bit
  *
- * Implements conversion as in VESA-DSC-1.2 7.7 Color Space Conversion
+ * Black pixels are protected with y==0 which has to be checked due to 4:2:0 chroma subsampling
+ * to prevent artifacts in images containing valid pixels only in subregion.
+ *
+ * There is no loss of information for other colors
+ * as the only RGB that maps to y==0 is black (see color cuboids)
+ *
+ * Implements YCoCg-R -> RGB conversion as in VESA-DSC-1.2 7.7 Color Space Conversion
  * - convert_rgb = 1
  * - bits_per_component = 10
  *
  * The 10 bit output RGB is scaled to 8 bit RGB
  *
- * Black pixels are treated specially in order to prevent artifacts in images containing valid pixels only in a subregion.
+ * Photoneo variantion of YCoCg(-R) doesn't match exactly VESA YCoCg-R
+ * but any difference is in LSBs which are lost when scaling to 8 bit RGB.
  *
  * @see https://en.wikipedia.org/wiki/YCoCg
  * @see https://glenwing.github.io/docs/VESA-DSC-1.2.pdf
  * @see https://github.com/photoneo-3d/photoneo-cpp-examples/blob/main/GigEV/aravis/common/YCoCg.h
+ * @see https://github.com/photoneo-3d/photoneo-cpp-examples/issues/4
  */
 
 //optimizes to branchless construct
@@ -596,14 +604,14 @@ void photoneoYCoCgR420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, co
         // transfer YCoCg-R to BGRA8
 
         ////Photoneo specific:
-        ////Black pixels are treated specially in order to prevent
-        ////artifacts in images containing valid pixels only in a subregion
+        ////Black pixels are protected with y==0 which has to be checked due to 4:2:0 chroma subsampling
+        ////to prevent artifacts in images containing valid pixels only in subregion.
         ////See: https://github.com/photoneo-3d/photoneo-cpp-examples/issues/4#issuecomment-1660578655
 
         ////Our implementation specific:
         ////(yij != 0) multiplications zero out YCoCb-R if y sample is 0 protecting black pixels
         ////at the same time and keeping high performance SIMD autovectorization
-        ////See: https://github.com/Extend-Robotics/camera_aravis/issues/15
+        ////See: https://github.com/Extend-Robotics/camera_aravis/issues/15#issuecomment-1661677749
         ycocgr_to_bgra8(bgra, y00, (y00 != 0) * csc_co, (y00 != 0) * csc_cg);
         ycocgr_to_bgra8(bgra + RGB_PIXEL_OFFSET, y01, (y01 != 0) * csc_co, (y01 != 0) * csc_cg);
         ycocgr_to_bgra8(bgra + RGB_STRIDE, y10, (y10 != 0) * csc_co, (y10 != 0) * csc_cg);
