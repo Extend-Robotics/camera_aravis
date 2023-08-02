@@ -487,21 +487,29 @@ void float_to_uint(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const 
  * Y is 10 bit
  * Co, Cg are 11 bit
  *
- * Implements conversion as in VESA-DSC-1.2 7.7 Color Space Conversion
+ * Black pixels are protected with y==0 which has to be checked due to 4:2:0 chroma subsampling
+ * to prevent artifacts in images containing valid pixels only in subregion.
+ *
+ * There is no loss of information for other colors
+ * as the only RGB that maps to y==0 is black (see color cuboids)
+ *
+ * Implements YCoCg-R -> RGB conversion as in VESA-DSC-1.2 7.7 Color Space Conversion
  * - convert_rgb = 1
  * - bits_per_component = 10
  *
  * The 10 bit output RGB is scaled to 8 bit RGB
  *
- * Black pixels are treated specially in order to prevent artifacts in images containing valid pixels only in a subregion.
+ * Photoneo variantion of YCoCg(-R) doesn't match exactly VESA YCoCg-R
+ * but any difference is in LSBs which are lost when scaling to 8 bit RGB.
  *
  * @see https://en.wikipedia.org/wiki/YCoCg
  * @see https://glenwing.github.io/docs/VESA-DSC-1.2.pdf
  * @see https://github.com/photoneo-3d/photoneo-cpp-examples/blob/main/GigEV/aravis/common/YCoCg.h
+ * @see https://github.com/photoneo-3d/photoneo-cpp-examples/issues/4
  */
 
-
-static inline int clamp2(int x, const int min, const int max)
+//optimizes to branchless construct
+static inline int16_t clamp2(int16_t x, const int16_t min, const int16_t max)
 {
   if (x < min) x = min;
   if (x > max) x = max;
@@ -510,26 +518,17 @@ static inline int clamp2(int x, const int min, const int max)
 
 //y positive,  e.g. for 10 bit in [0,1024)
 //csc_co and csc_cg centered around zero, e.g. for 10+1 bit in [-1024, 1024)
-static inline void ycocgr_to_bgra8(uint8_t *bgra, const int y, const int csc_co, const int csc_cg)
+static inline void ycocgr_to_bgra8(uint8_t *bgra, const int16_t y, const int16_t csc_co, const int16_t csc_cg)
 {
-  const int MAX_10BIT = 1023;
-  const int MAX_8BIT = 255;
+  const int16_t MAX_10BIT = 1023;
+  const uint8_t MAX_8BIT = 255;
   const uint16_t MAX_10BIT_TO_8BIT_SHIFT = 2; //scale 0-1023 to 0-255 by right shift (division by 4)
 
-  //Photoneo specific:
-  //Black pixels are treated specially in order to prevent
-  //artifacts in images containing valid pixels only in a subregion
-  if(!y)
-  {
-    bgra[0] = bgra[1] = bgra[2] = bgra[3] = 0;
-    return;
-  }
+  const int16_t t = y - (csc_cg >> 1);
 
-  const int t = y - (csc_cg >> 1);
-
-  const int csc_g = csc_cg + t;
-  const int csc_b = t - (csc_co >> 1);
-  const int csc_r = csc_co + csc_b;
+  const int16_t csc_g = csc_cg + t;
+  const int16_t csc_b = t - (csc_co >> 1);
+  const int16_t csc_r = csc_co + csc_b;
 
   //The final scaling from 10 bit to 8 bit is deviation from
   //Photoneo sample behavior but we want 8 bit per pixel RGB
@@ -599,14 +598,24 @@ void photoneoYCoCgR420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, co
         // re-center BITS_PER_COMPONENT+1 bit Co and Cg around 0
         // e.g. 11 bit unsingned in [0, 2048)
         // to   11 bit signed    in [-1024, 1024)
-        const int csc_co = co - (1 << BITS_PER_COMPONENT);
-        const int csc_cg = cg - (1 << BITS_PER_COMPONENT);
+        const int16_t csc_co = co - (1 << BITS_PER_COMPONENT);
+        const int16_t csc_cg = cg - (1 << BITS_PER_COMPONENT);
 
         // transfer YCoCg-R to BGRA8
-        ycocgr_to_bgra8(bgra, y00, csc_co, csc_cg);
-        ycocgr_to_bgra8(bgra + RGB_PIXEL_OFFSET, y01, csc_co, csc_cg);
-        ycocgr_to_bgra8(bgra + RGB_STRIDE, y10, csc_co, csc_cg);
-        ycocgr_to_bgra8(bgra + RGB_STRIDE + RGB_PIXEL_OFFSET, y11, csc_co, csc_cg);
+
+        ////Photoneo specific:
+        ////Black pixels are protected with y==0 which has to be checked due to 4:2:0 chroma subsampling
+        ////to prevent artifacts in images containing valid pixels only in subregion.
+        ////See: https://github.com/photoneo-3d/photoneo-cpp-examples/issues/4#issuecomment-1660578655
+
+        ////Our implementation specific:
+        ////(yij != 0) multiplications zero out YCoCb-R if y sample is 0 protecting black pixels
+        ////at the same time and keeping high performance SIMD autovectorization
+        ////See: https://github.com/Extend-Robotics/camera_aravis/issues/15#issuecomment-1661677749
+        ycocgr_to_bgra8(bgra, y00, (y00 != 0) * csc_co, (y00 != 0) * csc_cg);
+        ycocgr_to_bgra8(bgra + RGB_PIXEL_OFFSET, y01, (y01 != 0) * csc_co, (y01 != 0) * csc_cg);
+        ycocgr_to_bgra8(bgra + RGB_STRIDE, y10, (y10 != 0) * csc_co, (y10 != 0) * csc_cg);
+        ycocgr_to_bgra8(bgra + RGB_STRIDE + RGB_PIXEL_OFFSET, y11, (y11 != 0) * csc_co, (y11 != 0) * csc_cg);
 
         //move to next 2x2 pixel group
         ycocg += 2;
