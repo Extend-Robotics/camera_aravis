@@ -528,15 +528,6 @@ static inline void ycocgr_to_bgra8(uint8_t *bgra, const int16_t y, const int16_t
   bgra[1] = clamp2(csc_g, 0, MAX_10BIT) >> MAX_10BIT_TO_8BIT_SHIFT;
   bgra[2] = clamp2(csc_r, 0, MAX_10BIT) >> MAX_10BIT_TO_8BIT_SHIFT;
   bgra[3] = MAX_8BIT; //alpha channel
-
-  //Photoneo specific:
-  //Black pixels are treated specially in order to prevent
-  //artifacts in images containing valid pixels only in a subregion
-
-  //Has to be written this way to enable gcc autovectorization
-  //Do not change or move to beginning with return statement
-  if(!y)
-    bgra[0] = 0, bgra[1] = 0, bgra[2] = 0, bgra[3] = 0;
 }
 
 void photoneoYCoCgR420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const std::string out_format)
@@ -603,10 +594,20 @@ void photoneoYCoCgR420(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, co
         const int16_t csc_cg = cg - (1 << BITS_PER_COMPONENT);
 
         // transfer YCoCg-R to BGRA8
-        ycocgr_to_bgra8(bgra, y00, csc_co, csc_cg);
-        ycocgr_to_bgra8(bgra + RGB_PIXEL_OFFSET, y01, csc_co, csc_cg);
-        ycocgr_to_bgra8(bgra + RGB_STRIDE, y10, csc_co, csc_cg);
-        ycocgr_to_bgra8(bgra + RGB_STRIDE + RGB_PIXEL_OFFSET, y11, csc_co, csc_cg);
+
+        ////Photoneo specific:
+        ////Black pixels are treated specially in order to prevent
+        ////artifacts in images containing valid pixels only in a subregion
+        ////See: https://github.com/photoneo-3d/photoneo-cpp-examples/issues/4#issuecomment-1660578655
+
+        ////Our implementation specific:
+        ////(yij != 0) multiplications zero out YCoCb-R if y sample is 0 protecting black pixels
+        ////at the same time and keeping high performance SIMD autovectorization
+        ////See: https://github.com/Extend-Robotics/camera_aravis/issues/15
+        ycocgr_to_bgra8(bgra, y00, (y00 != 0) * csc_co, (y00 != 0) * csc_cg);
+        ycocgr_to_bgra8(bgra + RGB_PIXEL_OFFSET, y01, (y01 != 0) * csc_co, (y01 != 0) * csc_cg);
+        ycocgr_to_bgra8(bgra + RGB_STRIDE, y10, (y10 != 0) * csc_co, (y10 != 0) * csc_cg);
+        ycocgr_to_bgra8(bgra + RGB_STRIDE + RGB_PIXEL_OFFSET, y11, (y11 != 0) * csc_co, (y11 != 0) * csc_cg);
 
         //move to next 2x2 pixel group
         ycocg += 2;
