@@ -7,9 +7,15 @@
   <arg name="sensor_name"              default="camera"/>
   <arg name="serial_no"                default=""/>
 
+
   <!-- MotionCam
-       - in camera mode with color 10 fps is achievable, quality is lower than in scanner mode and resolution is up to 1120x800
-       - with TextureSource = Color delivers Intensity as custom YCoCg 4:2:0 pixel format in GenICam/GigE-Vision Mono16
+       - in `Camera` mode with color texture 1120x800@10 fps is achievable, resolution changes with `OutputTopology`
+       - in `Scanner` mode with color texture 1680x1200@2 fps is achievable, data is high quality
+  -->
+  <arg name="operation_mode"           default="Camera"/> <!-- ["Camera", "Scanner" -->
+
+  <!--
+       - with `TextureSource` = `Color` delivers Intensity as custom YCoCg-R 4:2:0 pixel format in GenICam/GigE-Vision Mono16
        - Range is delivered as float mm data, here we use FloatToUint adapter, to keep float use "PhotoneoYCoCg420,"
   -->
   <arg name="channel_names"            default="Intensity,Range"/>
@@ -17,13 +23,14 @@
   <arg name="pixel_format"             default="Mono16,Coord3D_C32f"/>
   <arg name="pixel_format_internal"    default="PhotoneoYCoCg420,FloatToUint"/>
 
+  <!-- "Range_Camera" or "Range_Scanner" depending on operation_mode -->
+  <arg name="calibration_file"         default="file://$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/Range_$(arg operation_mode).yaml"/>
+
   <!-- the Range and Intensity data is aligned, we use the same calibration twice  -->
-  <arg name="camera_info_url"          default="file://$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/Range.yaml,file://$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/Range.yaml"/>
+  <arg name="camera_info_url"          default="$(arg calibration_file),$(arg calibration_file)"/>
   <!-- and publish under same frame id  -->
   <arg name="frame_id"                 default="range_optical_frame,range_optical_frame"/>
 
-  <arg name="width"                    default="1120"/>
-  <arg name="height"                   default="800"/>
   <arg name="fps"                      default="20"/>
 
   <arg name="verbose"                  default="false"/>
@@ -49,8 +56,6 @@
     <param name="camera_info_url"        value="$(arg camera_info_url)"/>
 
     <!-- use GenICam SFNC names as stream control parameters -->
-    <param name="Width"                  value="$(arg width)"/>
-    <param name="Height"                 value="$(arg height)"/>
 
     <param name="AcquisitionFrameRate"   value="$(arg fps)" type="double"/>
     <param name="Gamma"                  value="1.0"/>
@@ -60,7 +65,10 @@
     <param name="GainAuto"               value="Continuous"/>
     <param name="BalanceWhiteAuto"       value="Continuous"/>
 
-    <param name="OperationMode"          value="Camera"/>
+    <param name="OperationMode"          value="$(arg operation_mode)"/>
+    <param name="CodingStrategy"         value="Interreflections"/>
+    <param name="CodingQuality"          value="Ultra"/> <!-- Scanner only: [Fast, High, Ultra] -->
+
     <!-- RegularGrid required for higher resolution and modelling optics with intrinsics/distortion-->
     <param name="OutputTopology"         value="RegularGrid"/>
     <param name="ColorSettings_ISO"      value="200" type="int"/>
