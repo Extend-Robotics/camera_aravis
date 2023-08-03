@@ -8,7 +8,7 @@
   <arg name="serial_no"                default=""/>
 
   <!-- MotionCam
-       - in camera mode with color 10 fps is achievable, quality is lower than in scanner mode and resolution is up to 1120x800
+       - in scanner mode only around 2 fps are achievable but quality is higher and resolution is 1680x1200
        - with TextureSource = Color delivers Intensity as custom YCoCg 4:2:0 pixel format in GenICam/GigE-Vision Mono16
        - Range is delivered as float mm data, here we use FloatToUint adapter, to keep float use "PhotoneoYCoCg420,"
   -->
@@ -18,12 +18,12 @@
   <arg name="pixel_format_internal"    default="PhotoneoYCoCg420,FloatToUint"/>
 
   <!-- the Range and Intensity data is aligned, we use the same calibration twice  -->
-  <arg name="camera_info_url"          default="file://$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/Range.yaml,file://$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/Range.yaml"/>
+  <arg name="camera_info_url"          default="file://$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/RangeScannerMode.yaml,file://$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/RangeScannerMode.yaml"/>
   <!-- and publish under same frame id  -->
   <arg name="frame_id"                 default="range_optical_frame,range_optical_frame"/>
 
-  <arg name="width"                    default="1120"/>
-  <arg name="height"                   default="800"/>
+  <arg name="width"                    default="1680"/>
+  <arg name="height"                   default="1200"/>
   <arg name="fps"                      default="20"/>
 
   <arg name="verbose"                  default="false"/>
@@ -60,7 +60,7 @@
     <param name="GainAuto"               value="Continuous"/>
     <param name="BalanceWhiteAuto"       value="Continuous"/>
 
-    <param name="OperationMode"          value="Camera"/>
+    <param name="OperationMode"          value="Scanner"/>
     <!-- RegularGrid required for higher resolution and modelling optics with intrinsics/distortion-->
     <param name="OutputTopology"         value="RegularGrid"/>
     <param name="ColorSettings_ISO"      value="200" type="int"/>
