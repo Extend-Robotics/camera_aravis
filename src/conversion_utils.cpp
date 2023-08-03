@@ -469,8 +469,6 @@ void float_to_uint(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out, const 
 
   floatDepth.convertTo(uintDepth, CV_16UC1, scale);
 
-  uint16_t middlePoint = uintDepth[uintDepth.rows/2][uintDepth.cols/2];
-
   out->encoding = out_format;
 }
 
