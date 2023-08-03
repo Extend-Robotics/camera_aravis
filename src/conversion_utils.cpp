@@ -518,7 +518,7 @@ static inline int16_t clamp2(int16_t x, const int16_t min, const int16_t max)
 
 //y positive,  e.g. for 10 bit in [0,1024)
 //csc_co and csc_cg centered around zero, e.g. for 10+1 bit in [-1024, 1024)
-static inline void ycocgr_to_bgra8(uint8_t *bgra, const int16_t y, const int16_t csc_co, const int16_t csc_cg)
+static inline void ycocgr_to_bgra8(uint8_t * const bgra, const int16_t y, const int16_t csc_co, const int16_t csc_cg)
 {
   const int16_t MAX_10BIT = 1023;
   const uint8_t MAX_8BIT = 255;

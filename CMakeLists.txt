@@ -5,6 +5,9 @@ project(camera_aravis)
 ## Enable simple buffer processing benchmark output
 #add_compile_definitions(ARAVIS_BUFFER_PROCESSING_BENCHMARK)
 
+## Emit notes on autovectorization
+#set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fopt-info-vec-optimized")
+
 ## Enable native optimizations & vectorization
 ## The generated code may not be portable to different archs
 ## Use only when deploying on particular hardware
