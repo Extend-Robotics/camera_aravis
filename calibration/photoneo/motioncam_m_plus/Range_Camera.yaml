@@ -40,11 +40,11 @@ camera_matrix:
   rows: 3
   cols: 3
   data: [1158.77, 0, 569.003, 0, 1158.7, 392.4, 0, 0, 1]
-distortion_model: plumb_bob
+distortion_model: rational_polynomial
 distortion_coefficients: 
   rows: 1
-  cols: 5
-  data: [-0.0810895, 0.105247, 9.91814e-05, 0.00054898, 0.0366575]
+  cols: 8
+  data: [-0.0810895, 0.105247, 9.91814e-05, 0.00054898, 0.0366575, 0.0, 0.0, 0.0]
 rectification_matrix: 
   rows: 3
   cols: 3
