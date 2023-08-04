@@ -78,12 +78,6 @@
     <!-- use GenICam SFNC names as stream control parameters -->
 
     <param name="AcquisitionFrameRate"   value="$(arg fps)" type="double"/>
-    <param name="Gamma"                  value="1.0"/>
-    <param name="Gain"                   value="0.0"/>
-    <param name="AutoFunctionsROIPreset" value="AutoFunctionsROIPreset_Full"/>
-    <param name="ExposureAuto"           value="Continuous"/>
-    <param name="GainAuto"               value="Continuous"/>
-    <param name="BalanceWhiteAuto"       value="Continuous"/>
 
     <param name="OperationMode"          value="$(arg operation_mode)"/>
     <param name="CodingStrategy"         value="Interreflections"/>
@@ -92,6 +86,7 @@
     <!-- RegularGrid required for higher resolution and modelling optics with intrinsics/distortion-->
     <param name="OutputTopology"         value="RegularGrid"/>
     <param name="ColorSettings_ISO"      value="200" type="int"/>
+    <param name="ColorSettings_Gamma"    value="1.0"/>
     <param name="ColorSettings_Exposure" value="20.480000"/>
     <param name="ExposureTime"           value="10.240000"/>
 
