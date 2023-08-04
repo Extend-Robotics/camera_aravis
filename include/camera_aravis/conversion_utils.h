@@ -163,7 +163,9 @@ const std::map<std::string, ConversionFunction> CONVERSIONS_DICTIONARY =
  //// data adapters
  { "FloatToUint", std::bind(&float_to_uint, std::placeholders::_1, std::placeholders::_2, 1.0f, sensor_msgs::image_encodings::TYPE_16UC1) },
  //// crazy internal pixel formats fixing various device quirks
- { "PhotoneoYCoCg420", std::bind(&photoneoYCoCgR420, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::BGRA8) }
+ { "PhotoneoYCoCg420", std::bind(&photoneoYCoCgR420, std::placeholders::_1, std::placeholders::_2, sensor_msgs::image_encodings::BGRA8) },
+ { "Mono11InMono16", std::bind(&shiftImg, std::placeholders::_1, std::placeholders::_2, 5 , sensor_msgs::image_encodings::MONO16) },
+ { "Mono8InMono16", std::bind(&shiftImg, std::placeholders::_1, std::placeholders::_2, 8 , sensor_msgs::image_encodings::MONO16) }
 };
 
 } // end namespace camera_aravis
