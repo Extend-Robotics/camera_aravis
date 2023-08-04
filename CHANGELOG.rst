@@ -3,12 +3,14 @@ Changelog for package camera_aravis
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 4.1.2 (2023-08-04)
+-------------------
 * Photoneo MotionCam3D Scanner mode support
 * Photoneo MotionCam3D TextureSource support
 * expose Photoneo MotionCam3D parameters in launchfile
 * optimize Photoneo YCoCg(-R) pixel format for SIMD autovectorization
 
 4.1.1 (2023-07-28)
+-------------------
 * Fix exposure time incorrectly set for MotionCam from dynamic reconfigure
 * Add simple internal buffer processing time benchmark
 * Decouple application buffer processing from aravis
