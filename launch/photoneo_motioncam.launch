@@ -5,8 +5,29 @@
   <arg name="manager_threads"          default="4"/>
 
   <arg name="sensor_name"              default="camera"/>
+
+  <!-- Requried if you need to keep retrying until device is available
+       Example: "Photoneo-MotionCam-3D Color-TRD-058"
+  -->
   <arg name="serial_no"                default=""/>
 
+  <!-- [0.32, 0.64, 1.28, 2.56, 5.12, 10.24, 14.336, 20.48, 24.576, 30.72, 34.816, 40.96, ...] for rest cosult docs -->
+  <arg name="color_exposure"           default="20.48" />
+
+  <!-- [50, 100, 200, 400, ...] higher ISO -> brighter image at the cost of noise -->
+  <arg name="color_iso"                default="200" />
+
+  <!-- [0.0-1000.0] non-linear gamma correction -->
+  <arg name="color_gamma"              default="1.0" />
+
+  <!-- [10.24, 14.336, 20.48, 24.576, 30.72, 34.816, 40.96] -->
+  <arg name="depth_exposure"           default="10.240000" />
+
+  <!-- [0-4095] intensity of projected "red" light used for depth, decrease in case of overexposure-->
+  <arg name="laser_power"              default="4095"/>
+
+  <!-- [0-4095] LED "white" light intensity used for texture, decrease in case of overexposure -->
+  <arg name="led_power"                default="4095"/>
 
   <!-- MotionCam
        - in `Camera` mode with color texture 1120x800@10 fps is achievable, resolution changes with `OutputTopology`
@@ -24,11 +45,11 @@
   <arg name="texture_source"           default="Color"/>
 
   <!--  Intensity is disguised in GenICam/GigE-Vision Mono16
-       - with `TextureSource` = `Color` is custom YCoCg-R 4:2:0 pixel format
-       - with `TextureSource` = `Laser` is 11 bit grayscale that behaves more like 10 bit image (saturates well before 2000)
-       - with `TextureSource` = `LED`   is 11 bit grayscale with very low signal (mapped to 8 bit to see anything)
-       - with `TextureSource` = `Focus` I assume 11 bit grayscale
-       - with `TextureSource` = `Computed` I assume 11 bit grayscale
+       - with `TextureSource` = `Color`    is custom YCoCg-R 4:2:0 pixel format
+       - with `TextureSource` = `LED`      is 11 bit grayscale with very low signal (mapped to 8 bit to see anything)
+       - with `TextureSource` = `Laser`    is 11 bit grayscale that behaves more like 10 bit image (saturates well before 2000)
+       - with `TextureSource` = `Focus`    is 11 bit grayscale computed from laser illumnation and also behaves more like 10 bit
+       - with `TextureSource` = `Computed` is 11 bit grayscale computed as above
   -->
   <arg name="intensity_pixel_format_internal" default="PhotoneoYCoCg420"  if="$(eval texture_source == 'Color')"/>
   <arg name="intensity_pixel_format_internal" default="Mono11InMono16"    if="$(eval texture_source == 'Laser')"/>
@@ -78,17 +99,27 @@
     <!-- use GenICam SFNC names as stream control parameters -->
 
     <param name="AcquisitionFrameRate"   value="$(arg fps)" type="double"/>
+    <param name="MaximumFPS"             value="$(arg fps)" type="double"/>
 
     <param name="OperationMode"          value="$(arg operation_mode)"/>
     <param name="CodingStrategy"         value="Interreflections"/>
     <param name="CodingQuality"          value="High"/> <!-- Scanner only: [Fast, High, Ultra] -->
 
+    <param name="CalibrationVolumeOnly"  value="true" type="bool"/>
+
     <!-- RegularGrid required for higher resolution and modelling optics with intrinsics/distortion-->
     <param name="OutputTopology"         value="RegularGrid"/>
-    <param name="ColorSettings_ISO"      value="200" type="int"/>
-    <param name="ColorSettings_Gamma"    value="1.0"/>
-    <param name="ColorSettings_Exposure" value="20.480000"/>
-    <param name="ExposureTime"           value="10.240000"/>
+
+    <param name="LaserPower"             value="$(arg laser_power)" type="int"/>
+    <param name="LEDPower"               value="$(arg led_power)"   type="int"/>
+
+    <param name="ColorSettings_ISO"      value="$(arg color_iso)" type="int"/>
+    <param name="ColorSettings_Gamma"    value="$(arg color_gamma)"/>
+
+    <param name="ColorSettings_Exposure" value="$(arg color_exposure)"/>
+    <param name="CameraExposure"         value="$(arg depth_exposure)"/>
+    <param name="ExposureTime"           value="$(arg depth_exposure)"/>
+    <param name="SinglePatternExposure"  value="$(arg depth_exposure)"/>
 
     <!-- Different params and allowed values in "Camera" and "Scanner" mode -->
     <param name="CameraTextureSource"    value="$(arg texture_source)" type="str" if="$(eval operation_mode == 'Camera')" />
