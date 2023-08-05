@@ -716,11 +716,14 @@ void CameraAravisNodelet::getBounds()
         aravis::device::feature::set_string(p_device_, "ComponentSelector", substream.name.c_str());
 
       aravis::camera::get_sensor_size(p_camera_, &sensor.width, &sensor.height);
+
+      //Component may not support getting ROI, in such case
+      //we at least initialize substream from stream level
+      ROI &roi = streams_[i].substreams[j].roi;
+      aravis::camera::bounds::get_width(p_camera_, &roi.width_min, &roi.width_max);
+      aravis::camera::bounds::get_height(p_camera_, &roi.height_min, &roi.height_max);
     }
   }
-
-  aravis::camera::bounds::get_width(p_camera_, &roi_.width_min, &roi_.width_max);
-  aravis::camera::bounds::get_height(p_camera_, &roi_.height_min, &roi_.height_max);
 
   aravis::camera::bounds::get_frame_rate(p_camera_, &config_min_.AcquisitionFrameRate, &config_max_.AcquisitionFrameRate);
 
@@ -787,8 +790,12 @@ void CameraAravisNodelet::setCameraSettings()
       aravis::camera::set_frame_rate(p_camera_, config_.AcquisitionFrameRate);
     }
 
-    // init default to full sensor resolution
-    aravis::camera::set_region(p_camera_, 0, 0, roi_.width_max, roi_.height_max);
+    const ROI &roi = streams_[i].substreams[0].roi;
+
+    // Init default to full sensor resolution
+    // We try to handle stream level for now
+    // I have no sensor that would support it on substream level
+    aravis::camera::set_region(p_camera_, 0, 0, roi.width_max, roi.height_max);
 
     // Set up the triggering.
     if (implemented_features_["TriggerMode"] && implemented_features_["TriggerSelector"])
@@ -802,7 +809,20 @@ void CameraAravisNodelet::setCameraSettings()
 void CameraAravisNodelet::readCameraSettings()
 {
   // get current state of camera for config_
-  aravis::camera::get_region(p_camera_, &roi_.x, &roi_.y, &roi_.width, &roi_.height);
+  for(int i = 0; i < streams_.size(); i++)
+  {
+    if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_, i);
+
+    ROI &roi = streams_[i].substreams[0].roi;
+    aravis::camera::get_region(p_camera_, &roi.x, &roi.y, &roi.width, &roi.height);
+
+    //copy ROI for other substreams for the start
+    //this may be wrong, I have no camera where I could check ROI per substream
+    //but we will adapt ROI when receiving data for the first time
+    for(int j = 1; j < streams_[i].substreams.size();++j)
+      streams_[i].substreams[j].roi = roi;
+  }
+
   config_.AcquisitionMode =
       implemented_features_["AcquisitionMode"] ? aravis::device::feature::get_string(p_device_, "AcquisitionMode") :
           "Continuous";
@@ -901,11 +921,12 @@ void CameraAravisNodelet::printCameraInfo()
     {
       const Substream &substream = streams_[i].substreams[j];
       const Sensor &sensor = substream.sensor;
+      const ROI &roi = streams_[i].substreams[j].roi;
 
       ROS_INFO_STREAM("  substream: " << substream.name);
       ROS_INFO("    Sensor width         = %d", sensor.width);
       ROS_INFO("    Sensor height        = %d", sensor.height);
-      ROS_INFO("    ROI x,y,w,h          = %d, %d, %d, %d", roi_.x, roi_.y, roi_.width, roi_.height);
+      ROS_INFO("    ROI x,y,w,h          = %d, %d, %d, %d", roi.x, roi.y, roi.width, roi.height);
       ROS_INFO("    Pixel format         = %s", sensor.pixel_format.c_str());
       ROS_INFO("    BitsPerPixel         = %lu", sensor.n_bits_pixel);
       ROS_INFO("    frame_id             = %s", substream.frame_id.c_str());
@@ -1874,10 +1895,12 @@ void CameraAravisNodelet::processImageBuffer(ArvBuffer *p_buffer, size_t stream_
   Stream &src = streams_[stream_id];
   Substream &substream = src.substreams[0];
   const Sensor &sensor = substream.sensor;
+  ROI &roi = substream.roi;
 
+  //check if received ROI matches initialized
+  adaptROI(p_buffer, roi, stream_id);
   //msg_ptr is ROS Image that wraps around aravis p_buffer data
-
-  fillImage(msg_ptr, p_buffer, substream.frame_id, sensor);
+  fillImage(msg_ptr, p_buffer, substream.frame_id, sensor, roi);
 
   // do the magic of conversion into a ROS format
   if (substream.convert_format) {
@@ -1886,7 +1909,7 @@ void CameraAravisNodelet::processImageBuffer(ArvBuffer *p_buffer, size_t stream_
     msg_ptr = cvt_msg_ptr;
   }
 
-  fillCameraInfo(substream, msg_ptr->header);
+  fillCameraInfo(substream, msg_ptr->header, roi);
 
   substream.cam_pub.publish(msg_ptr, substream.camera_info);
 
@@ -1899,20 +1922,22 @@ void CameraAravisNodelet::processImageBuffer(ArvBuffer *p_buffer, size_t stream_
 
 void CameraAravisNodelet::processPartBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substream_id)
 {
-  Stream & src = streams_[stream_id];
-  Substream & substream = src.substreams[substream_id];
-  const Sensor & sensor = substream.sensor;
-
-  size_t size = 0;
-  const void* data = arv_buffer_get_part_data(p_buffer, substream_id, &size);
+  Stream &src = streams_[stream_id];
+  Substream &substream = src.substreams[substream_id];
+  const Sensor &sensor = substream.sensor;
+  ROI &roi = substream.roi;
 
   // in multipart path, we can't map 1:1 aravis image with ROS image data
   // but we keep extra buffer pool on substream (part level)
   sensor_msgs::ImagePtr msg_ptr = substream.p_buffer_pool->getRecyclableImg();
 
-  fillImage(msg_ptr, p_buffer, substream.frame_id, sensor);
+  //check if received ROI matches initialized, this is not always true for substreams
+  adaptROI(p_buffer, roi, stream_id, substream_id);
+  fillImage(msg_ptr, p_buffer, substream.frame_id, sensor, roi);
 
   //fill contents from part buffer
+  size_t size = 0;
+  const void* data = arv_buffer_get_part_data(p_buffer, substream_id, &size);
   msg_ptr->data.resize(size);
   memcpy(msg_ptr->data.data(), data, size);
 
@@ -1923,7 +1948,7 @@ void CameraAravisNodelet::processPartBuffer(ArvBuffer *p_buffer, size_t stream_i
     msg_ptr = cvt_msg_ptr;
   }
 
-  fillCameraInfo(substream, msg_ptr->header);
+  fillCameraInfo(substream, msg_ptr->header, roi);
 
   substream.cam_pub.publish(msg_ptr, substream.camera_info);
 
@@ -1934,7 +1959,23 @@ void CameraAravisNodelet::processPartBuffer(ArvBuffer *p_buffer, size_t stream_i
     resetPtpClock();
 }
 
-void CameraAravisNodelet::fillImage(const sensor_msgs::ImagePtr &msg_ptr, ArvBuffer *p_buffer, const std::string frame_id, const Sensor& sensor)
+void CameraAravisNodelet::adaptROI(ArvBuffer *p_buffer, ROI &roi, size_t stream_id, size_t substream_id)
+{
+  gint x, y, width, height;
+
+  arv_buffer_get_part_region(p_buffer, substream_id, &x, &y, &width, &height);
+
+  if(x == roi.x && y == roi.y && width == roi.width && height == roi.height)
+    return;
+
+  ROS_WARN_STREAM("Initial ROI for stream " << stream_id << " substream " << substream_id << " doesn't match received data ROI" << std::endl <<
+                  "reinitializing to:" << " x=" << x <<  " y=" << y << " width=" << width << " height=" << height);
+
+  roi.x = x, roi.y = y, roi.width = width, roi.height = height;
+}
+
+void CameraAravisNodelet::fillImage(const sensor_msgs::ImagePtr &msg_ptr, ArvBuffer *p_buffer,
+                                    const std::string frame_id, const Sensor& sensor, const ROI &roi)
 {
   // fill the meta information of image message
   // get acquisition time
@@ -1945,13 +1986,13 @@ void CameraAravisNodelet::fillImage(const sensor_msgs::ImagePtr &msg_ptr, ArvBuf
   msg_ptr->header.seq = arv_buffer_get_frame_id(p_buffer);
   // fill other stream properties
   msg_ptr->header.frame_id = frame_id;
-  msg_ptr->width = roi_.width;
-  msg_ptr->height = roi_.height;
+  msg_ptr->width = roi.width;
+  msg_ptr->height = roi.height;
   msg_ptr->encoding = sensor.pixel_format;
   msg_ptr->step = (msg_ptr->width * sensor.n_bits_pixel)/8;
 }
 
-void CameraAravisNodelet::fillCameraInfo(Substream &substream, const std_msgs::Header &header)
+void CameraAravisNodelet::fillCameraInfo(Substream &substream, const std_msgs::Header &header, const ROI &roi)
 {
   // get current CameraInfo data
   if (!substream.camera_info) {
@@ -1967,8 +2008,8 @@ void CameraAravisNodelet::fillCameraInfo(Substream &substream, const std_msgs::H
         "can be different due to the region of interest (ROI) feature. In "
         "the YAML the image size should be the one on which the camera was "
         "calibrated. See CameraInfo.msg specification!");
-    substream.camera_info->width = roi_.width;
-    substream.camera_info->height = roi_.height;
+    substream.camera_info->width = roi.width;
+    substream.camera_info->height = roi.height;
   }
 }
 

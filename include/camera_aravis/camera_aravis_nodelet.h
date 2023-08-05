@@ -105,10 +105,23 @@ private:
     size_t n_bits_pixel = 0;
   };
 
+  struct ROI
+  {
+    int32_t x = 0;
+    int32_t y = 0;
+    int32_t width = 0;
+    int32_t width_min = 0;
+    int32_t width_max = 0;
+    int32_t height = 0;
+    int32_t height_min = 0;
+    int32_t height_max = 0;
+  };
+
   // logically single kind of data (image/image chunk/image in multipart/depth map/...)
   struct Substream
   {
     Sensor sensor;
+    ROI roi;
     std::string name;
     std::string frame_id;
     //pool for multipart path where images don't map 1:1 to aravis buffers
@@ -199,8 +212,10 @@ protected:
   void processImageBuffer(ArvBuffer *p_buffer, size_t stream_id, sensor_msgs::ImagePtr &msg_ptr);
   void processPartBuffer(ArvBuffer *p_buffer, size_t stream_id, size_t substream_id);
 
-  void fillImage(const sensor_msgs::ImagePtr &msg_ptr, ArvBuffer *p_buffer, const std::string frame_id, const Sensor& sensor);
-  void fillCameraInfo(Substream &substream, const std_msgs::Header &header);
+  void adaptROI(ArvBuffer *p_buffer, ROI &roi, size_t stream_id = 0, size_t substream_id = 0);
+  void fillImage(const sensor_msgs::ImagePtr &msg_ptr, ArvBuffer *p_buffer,
+                 const std::string frame_id, const Sensor& sensor, const ROI &roi);
+  void fillCameraInfo(Substream &substream, const std_msgs::Header &header, const ROI &roi);
   void publishExtendedCameraInfo(const Substream &substream,  size_t stream_id);
 
   // Clean-up if aravis device is lost
@@ -270,18 +285,6 @@ protected:
   std::atomic_bool software_trigger_active_;
 
   std::unordered_map<std::string, const bool> implemented_features_;
-
-  struct
-  {
-    int32_t x = 0;
-    int32_t y = 0;
-    int32_t width = 0;
-    int32_t width_min = 0;
-    int32_t width_max = 0;
-    int32_t height = 0;
-    int32_t height_min = 0;
-    int32_t height_max = 0;
-  } roi_;
 
   struct StreamIdData
   {
