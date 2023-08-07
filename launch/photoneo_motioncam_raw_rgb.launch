@@ -42,7 +42,7 @@
        "Camera" operation_mode:  ["Color", "Laser", "LED"]
        "Scanner" operation_mode: ["Color", "Focus", "Laser", "Computed", "LED"]
   -->
-  <arg name="texture_source"           default="laser"/>
+  <arg name="texture_source"           default="Laser"/>
 
   <!-- Range
       - is delivered as float mm data
