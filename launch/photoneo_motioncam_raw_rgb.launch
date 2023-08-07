@@ -51,10 +51,13 @@
   <arg name="pixel_format_internal"    default="FloatToUint,PhotoneoYCoCg420"/>
 
   <!-- "Range_Camera" or "Range_Scanner" depending on operation_mode -->
-  <arg name="calibration_file"         default="file://$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/Range_$(arg operation_mode).yaml"/>
+  <arg name="range_calibration_file"         default="file://$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/Range_$(arg operation_mode).yaml"/>
+
+  <!-- todo: generalize depending on resolution set -->
+  <arg name="color_camera_calibration_file"  default="file://$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/ColorCamera_Resolution_1932x1096.yaml"/>
 
   <!-- the Range and Intensity data is aligned, we use the same calibration twice  -->
-  <arg name="camera_info_url"          default="$(arg calibration_file),$(arg calibration_file)"/>
+  <arg name="camera_info_url"          default="$(arg range_calibration_file),$(arg color_camera_calibration_file)"/>
   <!-- and publish under same frame id  -->
   <arg name="frame_id"                 default="range_optical_frame,range_optical_frame"/>
 
@@ -98,6 +101,8 @@
 
     <param name="LaserPower"             value="$(arg laser_power)" type="int"/>
     <param name="LEDPower"               value="$(arg led_power)"   type="int"/>
+
+    <param name="ColorSettings_Resolution" value="Resolution_1932x1096" type="str"/> <!-- ["Resolution_1288x730", "Resolution_1932x1096", "Resolution_3864x2192"] -->
 
     <param name="ColorSettings_ISO"      value="$(arg color_iso)" type="int"/>
     <param name="ColorSettings_Gamma"    value="$(arg color_gamma)"/>
