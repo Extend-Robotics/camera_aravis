@@ -20,6 +20,9 @@
   <!-- [0.0-1000.0] non-linear gamma correction -->
   <arg name="color_gamma"              default="1.0" />
 
+  <!-- Only for raw RGB in ColorCamera (not RGB texture), doesn't affect typical workflows -->
+  <arg name="color_resolution"         default="Resolution_1932x1096"/> <!-- ["Resolution_1288x730", "Resolution_1932x1096", "Resolution_3864x2192"] -->
+
   <!-- [10.24, 14.336, 20.48, 24.576, 30.72, 34.816, 40.96] -->
   <arg name="depth_exposure"           default="10.240000" />
 
@@ -53,8 +56,8 @@
   <!-- "Range_Camera" or "Range_Scanner" depending on operation_mode -->
   <arg name="range_calibration_file"         default="file://$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/Range_$(arg operation_mode).yaml"/>
 
-  <!-- todo: generalize depending on resolution set -->
-  <arg name="color_camera_calibration_file"  default="file://$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/ColorCamera_Resolution_1932x1096.yaml"/>
+  <!-- ColorCamera_[Resolution_1288x730|Resolution_1932x1096|Resolution_3864x2192] depending on color_resolution -->
+  <arg name="color_camera_calibration_file"  default="file://$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/ColorCamera_$(arg color_resolution).yaml"/>
 
   <!-- the Range and Intensity data is aligned, we use the same calibration twice  -->
   <arg name="camera_info_url"          default="$(arg range_calibration_file),$(arg color_camera_calibration_file)"/>
@@ -102,7 +105,7 @@
     <param name="LaserPower"             value="$(arg laser_power)" type="int"/>
     <param name="LEDPower"               value="$(arg led_power)"   type="int"/>
 
-    <param name="ColorSettings_Resolution" value="Resolution_1932x1096" type="str"/> <!-- ["Resolution_1288x730", "Resolution_1932x1096", "Resolution_3864x2192"] -->
+    <param name="ColorSettings_Resolution" value="$(arg color_resolution)" type="str"/>
 
     <param name="ColorSettings_ISO"      value="$(arg color_iso)" type="int"/>
     <param name="ColorSettings_Gamma"    value="$(arg color_gamma)"/>

@@ -1,0 +1,57 @@
+# Device: 0
+#  Name:                    MotionCam-3D-TRD-058
+#  Hardware Identification: TRD-058
+#  Type:                    MotionCam-3D
+#  Firmware version:        1.10.1
+#  Variant:                 M+
+#  IsFileCamera:            No
+#  Feature-Alpha:           No
+#  Feature-Color:           Yes
+#  Status:                  Attached to PhoXi Control. Ready to connect
+
+# Device: 1
+#  Name:                    basic-example
+#  Hardware Identification: InstalledExamples-basic-example
+#  Type:                    PhoXi3DScan
+#  Firmware version:        
+#  Variant:                 
+#  IsFileCamera:            Yes
+#  Feature-Alpha:           No
+#  Feature-Color:           No
+#  Status:                  Not Attached to PhoXi Control. Ready to connect
+
+# Device: 2
+#  Name:                    color-example
+#  Hardware Identification: InstalledExamples-color-example
+#  Type:                    MotionCam-3D
+#  Firmware version:        
+#  Variant:                 
+#  IsFileCamera:            Yes
+#  Feature-Alpha:           No
+#  Feature-Color:           Yes
+#  Status:                  Not Attached to PhoXi Control. Ready to connect
+
+# You have already PhoXi device opened in PhoXi Control, the API Example is connected to device: TRD-058
+
+# ColorCameraImage (raw RGB, this is not depth aligned RGB texture!)
+# ColorCameraScale: 0.333333x0.333333
+image_width: 1288
+image_height: 730
+camera_name: TRD-058
+camera_matrix: 
+  rows: 3
+  cols: 3
+  data: [895.519, 0, 636.881, 0, 895.633, 363.132, 0, 0, 1]
+distortion_model: rational_polynomial
+distortion_coefficients: 
+  rows: 1
+  cols: 8
+  data: [0.0353329, -0.052106, -0.000742206, -0.000100143, 0.006824, 0.0, 0.0, 0.0]
+rectification_matrix: 
+  rows: 3
+  cols: 3
+  data: [1, 0, 0, 0, 1, 0, 0, 0, 1]
+projection_matrix: 
+  rows: 3
+  cols: 4
+  data: [1158.77, 0, 569.003, 0, 0, 1158.7, 392.4, 0, 0, 0, 1, 0]
