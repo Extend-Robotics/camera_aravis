@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+# Device: 0
+#  Name:                    MotionCam-3D-TRD-058
+#  Hardware Identification: TRD-058
+#  Type:                    MotionCam-3D
+#  Firmware version:        1.10.1
+#  Variant:                 M+
+#  IsFileCamera:            No
+#  Feature-Alpha:           No
+#  Feature-Color:           Yes
+#  Status:                  Not Attached to PhoXi Control. Ready to connect
+
+# Device: 1
+#  Name:                    basic-example
+#  Hardware Identification: InstalledExamples-basic-example
+#  Type:                    PhoXi3DScan
+#  Firmware version:        
+#  Variant:                 
+#  IsFileCamera:            Yes
+#  Feature-Alpha:           No
+#  Feature-Color:           No
+#  Status:                  Not Attached to PhoXi Control. Ready to connect
+
+# Device: 2
+#  Name:                    color-example
+#  Hardware Identification: InstalledExamples-color-example
+#  Type:                    MotionCam-3D
+#  Firmware version:        
+#  Variant:                 
+#  IsFileCamera:            Yes
+#  Feature-Alpha:           No
+#  Feature-Color:           Yes
+#  Status:                  Not Attached to PhoXi Control. Ready to connect
+
+# You have no PhoXi device opened in PhoXi Control, the API Example will try to connect to first device in device list
+
+# ColorCameraImage (raw RGB, this is not depth aligned RGB texture!)
+# ColorCameraScale: 0.5x0.5
+
+# 3D sensor should be [0,0,0] with identity rotation (frame of reference)
+# otherwise this tool will not generate correct extrinsics
+# 3D sensor position: [0; 0; 0]
+# 3D sensor X axis: [1; 0; 0]
+# 3D sensor Y axis: [0; 1; 0]
+# 3D sensor Z axis: [0; 0; 1]
+
+# color camera position: [-285.575; 0.348021; -2.64781]
+# color camera X axis: [0.999758; -0.021911; -0.00175325]
+# color camera Y axis: [0.0219171; 0.999753; 0.00358584]
+# color camera Z axis: [0.00167425; -0.0036234; 0.999992]
+-->
+<launch>
+  <node pkg="tf2_ros" type="static_transform_publisher" name="range_color_camera_link_broadcaster" args="-0.285575 0.000348021 -0.00264781 0.00180242 0.000856928 -0.0109577 0.999938 range_optical_frame color_camera_optical_frame" />
+</launch>
