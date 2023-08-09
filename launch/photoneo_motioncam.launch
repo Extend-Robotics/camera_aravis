@@ -11,70 +11,156 @@
   -->
   <arg name="serial_no"                default=""/>
 
-  <!-- [0.32, 0.64, 1.28, 2.56, 5.12, 10.24, 14.336, 20.48, 24.576, 30.72, 34.816, 40.96, ...] for rest cosult docs -->
-  <arg name="color_exposure"           default="20.48" />
-
-  <!-- [50, 100, 200, 400, ...] higher ISO -> brighter image at the cost of noise -->
-  <arg name="color_iso"                default="200" />
-
-  <!-- [0.0-1000.0] non-linear gamma correction -->
-  <arg name="color_gamma"              default="1.0" />
-
-  <!-- [10.24, 14.336, 20.48, 24.576, 30.72, 34.816, 40.96] -->
-  <arg name="depth_exposure"           default="10.240000" />
-
-  <!-- [0-4095] intensity of projected "red" light used for depth, decrease in case of overexposure-->
-  <arg name="laser_power"              default="4095"/>
-
-  <!-- [0-4095] LED "white" light intensity used for texture, decrease in case of overexposure -->
-  <arg name="led_power"                default="4095"/>
-
   <!-- MotionCam
        - in `Camera` mode with color texture 1120x800@10 fps is achievable, resolution changes with `OutputTopology`
        - in `Scanner` mode with color texture 1680x1200@2 fps is achievable, data is high quality
   -->
   <arg name="operation_mode"           default="Camera"/> <!-- ["Camera", "Scanner"] -->
 
-  <arg name="channel_names"            default="Intensity,Range"/>
-  <arg name="pixel_format"             default="Mono16,Coord3D_C32f"/>
+  <!-- Device has multiple components.
 
-  <!-- Possible TextureSource (sent in Intensity):
+       Supported in this launchfile:
+       - `Intensity` - texture data device aligned to `Range`, multiple texture sources to choose from
+       - `Range` - depth map with 3D data, resolution depends on operation_mode and OutputTopology
+       - `ColorCamera` - raw RGB data from physically separate subsensor, separate frame_id and calibration
+
+      Don't enable components you don't use. Even ColorCamera alone at high resolution saturates 1 Gb link.
+  -->
+
+  <arg name="enable_intensity"       default="true"/>
+  <arg name="enable_range"           value="true"/> <!-- mandatory in our launchfile-->
+  <arg name="enable_color_camera"    default="false"/>
+
+  <!-- Possible TextureSource (in Intensity):
        "Camera" operation_mode:  ["Color", "Laser", "LED"]
        "Scanner" operation_mode: ["Color", "Focus", "Laser", "Computed", "LED"]
   -->
   <arg name="texture_source"           default="Color"/>
 
-  <!--  Intensity is disguised in GenICam/GigE-Vision Mono16
+  <arg name="color_exposure"           default="20.48" />      <!-- [0.32, 0.64, 1.28, 2.56, 5.12, 10.24, 14.336, 20.48, 24.576, 30.72, 34.816, 40.96, ...] for rest cosult docs -->
+  <arg name="color_iso"                default="200" />        <!-- [50, 100, 200, 400, ...] higher ISO -> brighter image at the cost of noise -->
+  <arg name="color_gamma"              default="1.0" />        <!-- [0.0-1000.0] non-linear gamma correction -->
+  <arg name="depth_exposure"           default="10.240000" />  <!-- [10.24, 14.336, 20.48, 24.576, 30.72, 34.816, 40.96] -->
+  <arg name="laser_power"              default="4095"/>        <!-- [0-4095] intensity of projected "red" light used for depth, decrease in case of overexposure-->
+  <arg name="led_power"                default="4095"/>        <!-- [0-4095] LED "white" light intensity used for texture, decrease in case of overexposure -->
+
+  <!-- Only for raw RGB in ColorCamera (not RGB texture), doesn't affect typical workflows -->
+  <arg name="color_resolution"         default="Resolution_1932x1096"/> <!-- ["Resolution_1288x730", "Resolution_1932x1096", "Resolution_3864x2192"] -->
+
+  <!-- Mainly if you need to lower framerate, in most modes 20 FPS would not be achievable -->
+  <arg name="fps"                      default="20"/>
+
+  <arg name="verbose"                  default="false"/>
+
+  <!-- ####################################################################### -->
+  <!-- What follows is implementation and should not be changed in typical use -->
+  <!-- ####################################################################### -->
+
+  <!-- Component description construction for
+       - channels
+       - pixel formats
+       - internal pixel formats
+       - calibrations
+       - frame_ids
+       follows
+  -->
+
+  <!-- Construct component description from args, e.g. like "Intensity,Range" -->
+  <arg name="intensity_channel" default="Intensity," if="$(arg enable_intensity)"/>
+  <arg name="intensity_channel" default=""           unless="$(arg enable_intensity)"/>
+
+  <arg name="range_channel" default="Range"/>
+
+  <arg name="color_camera_channel" default=",ColorCamera" if="$(arg enable_color_camera)"/>
+  <arg name="color_camera_channel" default=""            unless="$(arg enable_color_camera)"/>
+
+  <!-- Final construction -->
+  <arg name="channel_names"            default="$(arg intensity_channel)$(arg range_channel)$(arg color_camera_channel)"/>
+
+  <!-- Construct pixel format description from args, e.g. like "Mono16,Coord3D_C32f" -->
+
+  <arg name="intensity_pixel_format" default="Mono16,"    if="$(arg enable_intensity)"/>
+  <arg name="intensity_pixel_format" default=""           unless="$(arg enable_intensity)"/>
+
+  <arg name="range_pixel_format"     value="Coord3D_C32f"/>
+
+  <arg name="color_camera_pixel_format" default=",Mono16"     if="$(arg enable_color_camera)"/>
+  <arg name="color_camera_pixel_format" default=""            unless="$(arg enable_color_camera)"/>
+
+  <!-- Final construction -->
+  <arg name="pixel_format"             default="$(arg intensity_pixel_format)$(arg range_pixel_format)$(arg color_camera_pixel_format)"/>
+
+
+  <!-- Construct internal pixel format description from args (device sends different things under Mono16) -->
+  <!-- e.g. like "PhotoneoYCoCg420,FloatToUint" -->
+
+  <!--  Intensity component is disguised in GenICam/GigE-Vision Mono16
        - with `TextureSource` = `Color`    is custom YCoCg-R 4:2:0 pixel format
        - with `TextureSource` = `LED`      is 11 bit grayscale with very low signal (mapped to 8 bit to see anything)
        - with `TextureSource` = `Laser`    is 11 bit grayscale that behaves more like 10 bit image (saturates well before 2000)
        - with `TextureSource` = `Focus`    is 11 bit grayscale computed from laser illumnation and also behaves more like 10 bit
        - with `TextureSource` = `Computed` is 11 bit grayscale computed as above
-  -->
-  <arg name="intensity_pixel_format_internal" default="PhotoneoYCoCg420"  if="$(eval texture_source == 'Color')"/>
-  <arg name="intensity_pixel_format_internal" default="Mono11InMono16"    if="$(eval texture_source == 'Laser')"/>
-  <arg name="intensity_pixel_format_internal" default="Mono8InMono16"     if="$(eval texture_source == 'LED')"/>
-  <arg name="intensity_pixel_format_internal" default="Mono11InMono16"    if="$(eval texture_source == 'Focus')"/>
-  <arg name="intensity_pixel_format_internal" default="Mono11InMono16"    if="$(eval texture_source == 'Computed')"/>
 
-  <!-- Range
+       Intensity is always aligned to Range (same frame_id and calibration)
+  -->
+  <arg name="intensity_pixel_format_internal_tmp" default="PhotoneoYCoCg420"  if="$(eval texture_source == 'Color')"/>
+  <arg name="intensity_pixel_format_internal_tmp" default="Mono8InMono16"     if="$(eval texture_source == 'LED')"/>
+  <arg name="intensity_pixel_format_internal_tmp" default="Mono11InMono16"    if="$(eval texture_source == 'Laser')"/>
+  <arg name="intensity_pixel_format_internal_tmp" default="Mono11InMono16"    if="$(eval texture_source == 'Focus')"/>
+  <arg name="intensity_pixel_format_internal_tmp" default="Mono11InMono16"    if="$(eval texture_source == 'Computed')"/>
+
+  <arg name="intensity_pixel_format_internal" default="$(arg intensity_pixel_format_internal_tmp),"    if="$(arg enable_intensity)"/>
+  <arg name="intensity_pixel_format_internal" default=""                                               unless="$(arg enable_intensity)"/>
+
+  <!-- Range component
       - is delivered as float mm data
       - here we use FloatToUint adapter
-      - to keep float use "$(arg intensity_pixel_format_internal),"
+      - to keep float use empty ""
   -->
-  <arg name="pixel_format_internal"    default="$(arg intensity_pixel_format_internal),FloatToUint"/>
+  <arg name="range_pixel_format_internal" default="FloatToUint"/>
+
+  <!-- ColorCamera is custom YCoCg-R 4:2:0 pixel format inside GenICam/GigE-Vision Mono16 -->
+  <arg name="color_camera_pixel_format_internal" default=",PhotoneoYCoCg420"     if="$(arg enable_color_camera)"/>
+  <arg name="color_camera_pixel_format_internal" default=""                      unless="$(arg enable_color_camera)"/>
+
+  <!-- Final construction -->
+  <arg name="pixel_format_internal"    default="$(arg intensity_pixel_format_internal)$(arg range_pixel_format_internal)$(arg color_camera_pixel_format_internal)"/>
+
+  <!-- Construct camera_info_url format description from args e.g. "intensity_calibration_file,range_calibration_file" -->
 
   <!-- "Range_Camera" or "Range_Scanner" depending on operation_mode -->
-  <arg name="calibration_file"         default="file://$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/Range_$(arg operation_mode).yaml"/>
+  <arg name="range_calibration_file"      default="file://$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/Range_$(arg operation_mode).yaml"/>
 
-  <!-- the Range and Intensity data is aligned, we use the same calibration twice  -->
-  <arg name="camera_info_url"          default="$(arg calibration_file),$(arg calibration_file)"/>
-  <!-- and publish under same frame id  -->
-  <arg name="frame_id"                 default="range_optical_frame,range_optical_frame"/>
+  <arg name="intensity_calibration_file"  default="$(arg range_calibration_file)," if="$(arg enable_intensity)"/>   <!-- aligned to Range - shared calibration -->
+  <arg name="intensity_calibration_file"  default=""                               unless="$(arg enable_intensity)"/>
 
-  <arg name="fps"                      default="20"/>
+  <!-- ColorCamera_[Resolution_1288x730|Resolution_1932x1096|Resolution_3864x2192] depending on color_resolution -->
+  <arg name="color_camera_calibration_file" default=",file://$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/ColorCamera_$(arg color_resolution).yaml" if="$(arg enable_color_camera)"/>
+  <arg name="color_camera_calibration_file" default=""                                                                                                        unless="$(arg enable_color_camera)"/>
 
-  <arg name="verbose"                  default="false"/>
+  <!-- Final construction -->
+  <arg name="camera_info_url" default="$(arg intensity_calibration_file)$(arg range_calibration_file)$(arg color_camera_calibration_file)"/>
+
+  <!-- Construct frame_id format description from args e.g. "range_optical_frame,range_optical_frame" -->
+  <arg name="range_frame_id"  default="range_optical_frame"/>
+
+  <arg name="intensity_frame_id"  default="$(arg range_frame_id),"        if="$(arg enable_intensity)"/> <!-- aligned to Range - shared frame id -->
+  <arg name="intensity_frame_id"  default=""                              unless="$(arg enable_intensity)"/>
+
+  <arg name="color_camera_frame_id"  default=",color_camera_optical_frame"    if="$(arg enable_color_camera)"/>
+  <arg name="color_camera_frame_id"  default=""                               unless="$(arg enable_color_camera)"/>
+
+  <!-- Final construction  -->
+  <arg name="frame_id" default="$(arg intensity_frame_id)$(arg range_frame_id)$(arg color_camera_frame_id)"/>
+
+  <!-- End of component description construction -->
+
+  <!-- ####################################################################### -->
+  <!-- Finally launch nodes/nodelets                                           -->
+  <!-- ####################################################################### -->
+
+  <!-- Publish transform between color_camera_optical_frame and range_optical_frame -->
+  <include file="$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/ColorCameraRangeExtrinsics.launch" if="$(arg enable_color_camera)"/>
 
   <!-- Nodelet Manager -->
   <node if="$(arg load_manager)" pkg="nodelet" type="nodelet" name="$(arg manager_name)" args="manager" output="screen">
@@ -112,6 +198,8 @@
 
     <param name="LaserPower"             value="$(arg laser_power)" type="int"/>
     <param name="LEDPower"               value="$(arg led_power)"   type="int"/>
+
+    <param name="ColorSettings_Resolution" value="$(arg color_resolution)" type="str"/>
 
     <param name="ColorSettings_ISO"      value="$(arg color_iso)" type="int"/>
     <param name="ColorSettings_Gamma"    value="$(arg color_gamma)"/>
