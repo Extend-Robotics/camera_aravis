@@ -59,7 +59,7 @@
   <!-- the Range and Intensity data is aligned, we use the same calibration twice  -->
   <arg name="camera_info_url"          default="$(arg range_calibration_file),$(arg color_camera_calibration_file)"/>
   <!-- and publish under same frame id  -->
-  <arg name="frame_id"                 default="range_optical_frame,range_optical_frame"/>
+  <arg name="frame_id"                 default="range_optical_frame,color_camera_optical_frame"/>
 
   <arg name="fps"                      default="20"/>
 
