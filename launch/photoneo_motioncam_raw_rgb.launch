@@ -68,6 +68,9 @@
 
   <arg name="verbose"                  default="false"/>
 
+  <!-- Publish transform between color_camera_optical_frame and range_optical_frame -->
+  <include file="$(find camera_aravis)/calibration/photoneo/motioncam_m_plus/ColorCameraRangeExtrinsics.launch" />
+
   <!-- Nodelet Manager -->
   <node if="$(arg load_manager)" pkg="nodelet" type="nodelet" name="$(arg manager_name)" args="manager" output="screen">
     <param name="num_worker_threads" value="$(arg manager_threads)" />
