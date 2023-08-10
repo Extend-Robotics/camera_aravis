@@ -131,4 +131,54 @@ The solution is to start with a base of ROS time, and to accumulate the dt's fro
 To accomodate the difference in clock rates, a PID controller gently pulls the result toward
 ROS time.
 
+-------------------------
+
+If you see a lot of errors like
+
+```bash
+[ WARN] [1691651985.401198104]: (range_optical_frame (and possibly subframes)) Frame error: ARV_BUFFER_STATUS_TIMEOUT
+```
+
+Check if you are not getting errors on network layer
+
+```bash
+# check if errors are growing
+netstat -us | grep errors
+```
+
+If yes try increasing network buffer sizes
+
+```bash
+# read current
+sudo sysctl net.core.rmem_max
+sudo sysctl net.core.rmem_default
+```
+
+The unit is bytes (kernel [docs](https://kernel.org/doc/Documentation/sysctl/net.txt))
+
+
+```bash
+# set new, e.g. try 10x more than your original
+sudo sysctl -w net.core.rmem_max=NEW_VALUE
+sudo sysctl -w net.core.rmem_default=NEW_VALUE
+```
+
+Recheck if still getting errors.
+
+Make final change permanent in `/etc/sysctl.conf`
+
+```bash
+tail /etc/sysctl.conf
+# for what other values do
+#kernel.sysrq=438
+
+###################################################################
+
+# Increase network buffer sizes
+# 10 times my original max ~= 16 Mb
+
+net.core.rmem_max = NEW_VALUE
+net.core.rmem_default = NEW_VALUE
+```
+
 
