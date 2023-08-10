@@ -2,6 +2,15 @@
 Changelog for package camera_aravis
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.1.3 (2023-08-10)
+-------------------
+* Adapt ROI at runtime to received data
+* Photoneo MotionCam3D ColorCamera component (raw RGB) launchfile support
+ * With intrinsics (camera_info) and extrinsics (tf transform)
+* Document fix for network layer buffer timeouts
+ * Fixes ARV_BUFFER_STATUS_TIMEOUT warnings
+ * this is separate from wrong application layer logic fix in 4.1.1
+
 4.1.2 (2023-08-04)
 -------------------
 * Photoneo MotionCam3D Scanner mode support
@@ -14,21 +23,21 @@ Changelog for package camera_aravis
 * Fix exposure time incorrectly set for MotionCam from dynamic reconfigure
 * Add simple internal buffer processing time benchmark
 * Decouple application buffer processing from aravis
-  * Fixes ARV_BUFFER_STATUS_TIMEOUT warnings
+ * Fixes ARV_BUFFER_STATUS_TIMEOUT warnings
 
 4.1.0 (2023-07-25)
 ------------------
 * Launchfile and sample calibration for Photoneo MotionCam M+ (multipart)
 * Rework frame_id support
-  * Breaking changes
-   * Removed frame_id from dynamic reconfigure
-   * Removed optical frame tf publishing
+ * Breaking changes
+  * Removed frame_id from dynamic reconfigure
+  * Removed optical frame tf publishing
 * Internal FloatToUint pixel format (depth map conversion)
 * Internal custom Photoneo YCoCg 4:2:0 subsampling pixel format
 * Mechanism for overriding pixel format used internally
 * Automatically disable/enable multipart components
 * Multipart data support
-  * Breaking changes: multisource separator is now `;` and multipart `,`
+ * Breaking changes: multisource separator is now `;` and multipart `,`
 
 4.0.4 (2022-12-23)
 ------------------
