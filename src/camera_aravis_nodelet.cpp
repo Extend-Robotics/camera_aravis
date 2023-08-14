@@ -497,17 +497,10 @@ void CameraAravisNodelet::onInit()
   if (use_ptp_stamp_)
     resetPtpClock();
 
-  // enable multipart data if we configure for substreams
+  // enable multipart data
   // chunked data is not implemented yet so we use multipart
-  bool has_substreams = std::any_of(streams_.begin(), streams_.end(),
-                                   [](const Stream &stream)
-                                     { return stream.substreams.size() > 1; });
-
-  if(has_substreams)
-  {
-    ROS_INFO("Detected substreams - enabling multipart output");
-    aravis::camera::set_multipart_output_format(p_camera_, true);
-  }
+  ROS_INFO("Enabling multipart data (chunked is not implemented yet)");
+  aravis::camera::set_multipart_output_format(p_camera_, true);
 
   // spawn camera stream in thread, so onInit() is not blocked
   spawning_ = true;
