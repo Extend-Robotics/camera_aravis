@@ -2,6 +2,10 @@
 Changelog for package camera_aravis
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.1.4 (2023-08-16)
+-------------------
+* Always preffer multipart mode over chunked
+
 4.1.3 (2023-08-10)
 -------------------
 * Adapt ROI at runtime to received data
