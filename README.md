@@ -138,7 +138,16 @@ ROS time.
 
 For GigE Vision cameras in high bandwidth scenarios you may need to increase MTU for more fps.
 
-You can do it with GenICam:
+On OS side you may do it with `ip`
+
+```bash
+# identify your network interface name
+ip link list
+# set jumbo frames 9000 mtu for network interface 'enp60s0'
+sudo ip link set dev enp60s0 mtu 9000
+```
+
+On device side you may do it with GenICam:
 - `GevSCPSPacketSize` or `DeviceStreamChannelPacketSize`
 
 For example see [`photoneo_motioncam.launch`](https://github.com/Extend-Robotics/camera_aravis/blob/extend/launch/photoneo_motioncam.launch)
