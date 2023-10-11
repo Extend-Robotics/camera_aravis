@@ -416,12 +416,6 @@ void CameraAravisNodelet::onInit()
   use_ptp_stamp_ = pnh.param<bool>("use_ptp_timestamp", use_ptp_stamp_);
   pub_ext_camera_info_ = pnh.param<bool>("ExtendedCameraInfo", pub_ext_camera_info_); // publish an extended camera info message
 
-  // Get other (non GenIcam) parameter current values.
-  pnh.param<double>("softwaretriggerrate", config_.softwaretriggerrate, config_.softwaretriggerrate);
-  pnh.param<int>("mtu", config_.mtu, config_.mtu);
-  pnh.param<bool>("auto_master", config_.AutoMaster, config_.AutoMaster);
-  pnh.param<bool>("auto_slave", config_.AutoSlave, config_.AutoSlave);
-
   std::string stream_channel_args;
   std::vector<std::vector<std::string>> substream_names;
 
@@ -470,6 +464,8 @@ void CameraAravisNodelet::onInit()
 
   setUSBMode();
 
+  //MTU maps to GenICam GevSCPSPacketSize (deprecated) or DeviceStreamChannelPacketSize
+  pnh.param<int>("mtu", config_.mtu, config_.mtu);
   setCameraSettings();
 
   // set automatic rosparam features before camera readout
@@ -478,6 +474,11 @@ void CameraAravisNodelet::onInit()
   writeCameraFeaturesFromRosparamForStreams();
 
   readCameraSettings();
+
+  // Get other (non GenIcam) parameter current values.
+  pnh.param<double>("softwaretriggerrate", config_.softwaretriggerrate, config_.softwaretriggerrate);
+  pnh.param<bool>("auto_master", config_.AutoMaster, config_.AutoMaster);
+  pnh.param<bool>("auto_slave", config_.AutoSlave, config_.AutoSlave);
 
   setAutoMaster(config_.AutoMaster);
   setAutoSlave(config_.AutoSlave);
@@ -489,6 +490,7 @@ void CameraAravisNodelet::onInit()
   reconfigure_server_->setConfigMax(config_max_);
   reconfigure_server_->updateConfig(config_);
   ros::Duration(2.0).sleep();
+
   reconfigure_server_->setCallback(boost::bind(&CameraAravisNodelet::rosReconfigureCallback, this, _1, _2));
 
   printCameraInfo();
@@ -797,6 +799,9 @@ void CameraAravisNodelet::setCameraSettings()
       aravis::device::feature::set_string(p_device_, "TriggerMode", "Off");
     }
   }
+
+    if(implemented_features_["GevSCPSPacketSize"]) //mtu
+      aravis::device::feature::set_integer(p_device_, "GevSCPSPacketSize", config_.mtu);
 }
 
 void CameraAravisNodelet::readCameraSettings()
@@ -832,6 +837,8 @@ void CameraAravisNodelet::readCameraSettings()
   config_.TriggerSource =
       implemented_features_["TriggerSource"] ? aravis::device::feature::get_string(p_device_, "TriggerSource") :
           "Software";
+  config_.mtu =
+      implemented_features_["GevSCPSPacketSize"] ? aravis::device::feature::get_integer(p_device_, "GevSCPSPacketSize") : config_.mtu;
 }
 
 void CameraAravisNodelet::initCalibration()
