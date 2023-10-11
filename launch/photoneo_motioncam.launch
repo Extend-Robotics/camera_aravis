@@ -50,6 +50,9 @@
   <!-- Mainly if you need to lower framerate, in most modes 20 FPS would not be achievable -->
   <arg name="fps"                      default="20"/>
 
+  <!-- Set MTU with GenICam GevSCPSPacketSize, high MTU (like 9000) improves FPS in high bandwidth scenarios, 0 to leave as is  -->
+  <arg name="mtu"                      default="0"/>
+
   <arg name="verbose"                  default="false"/>
 
   <!-- ####################################################################### -->
@@ -183,6 +186,9 @@
     <param name="camera_info_url"        value="$(arg camera_info_url)"/>
 
     <!-- use GenICam SFNC names as stream control parameters -->
+
+    <!-- MTU maps to GenICam GevSCPSPacketSize or DeviceStreamChannelPacketSize -->
+    <param name="GevSCPSPacketSize"      value="$(arg mtu)" type="int" unless="$(eval mtu == 0)" />
 
     <param name="AcquisitionFrameRate"   value="$(arg fps)" type="double"/>
     <param name="MaximumFPS"             value="$(arg fps)" type="double"/>

@@ -132,6 +132,19 @@ ROS time.
 
 -------------------------
 
+## Troubleshooting
+
+### MTU
+
+For GigE Vision cameras in high bandwidth scenarios you may need to increase MTU for more fps.
+
+You can do it with GenICam:
+- `GevSCPSPacketSize` or `DeviceStreamChannelPacketSize`
+
+For example see [`photoneo_motioncam.launch`](https://github.com/Extend-Robotics/camera_aravis/blob/extend/launch/photoneo_motioncam.launch)
+
+### `ARV_BUFFER_STATUS_TIMEOUT`
+
 If you see a lot of errors like
 
 ```bash
@@ -179,5 +192,8 @@ tail /etc/sysctl.conf
 net.core.rmem_max = NEW_VALUE
 net.core.rmem_default = NEW_VALUE
 ```
+
+
+
 
 
