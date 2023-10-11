@@ -41,7 +41,6 @@ a variety of camera features via the ROS reconfigure_gui, including the followin
 * softwaretriggerrate  (float)
 * frame_id             (string)
 * FocusPos             (integer)
-* mtu                  (integer)
 * usb_mode             (string: SYNC, ASYNC, DEFAULT) { aravis >= v0.8.17 }
 
 Note that the above are also the ROS parameter names of their respective feature.  You may

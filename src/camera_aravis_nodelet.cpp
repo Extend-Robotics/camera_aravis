@@ -464,8 +464,6 @@ void CameraAravisNodelet::onInit()
 
   setUSBMode();
 
-  //MTU maps to GenICam GevSCPSPacketSize (deprecated) or DeviceStreamChannelPacketSize
-  pnh.param<int>("mtu", config_.mtu, config_.mtu);
   setCameraSettings();
 
   // set automatic rosparam features before camera readout
@@ -799,9 +797,6 @@ void CameraAravisNodelet::setCameraSettings()
       aravis::device::feature::set_string(p_device_, "TriggerMode", "Off");
     }
   }
-
-    if(implemented_features_["GevSCPSPacketSize"]) //mtu
-      aravis::device::feature::set_integer(p_device_, "GevSCPSPacketSize", config_.mtu);
 }
 
 void CameraAravisNodelet::readCameraSettings()
@@ -837,8 +832,6 @@ void CameraAravisNodelet::readCameraSettings()
   config_.TriggerSource =
       implemented_features_["TriggerSource"] ? aravis::device::feature::get_string(p_device_, "TriggerSource") :
           "Software";
-  config_.mtu =
-      implemented_features_["GevSCPSPacketSize"] ? aravis::device::feature::get_integer(p_device_, "GevSCPSPacketSize") : config_.mtu;
 }
 
 void CameraAravisNodelet::initCalibration()
@@ -1512,7 +1505,6 @@ void CameraAravisNodelet::rosReconfigureCallback(Config &config, uint32_t level)
   const bool changed_trigger_mode = (config_.TriggerMode != config.TriggerMode);
   const bool changed_trigger_source = (config_.TriggerSource != config.TriggerSource) || changed_trigger_mode;
   const bool changed_focus_pos = (config_.FocusPos != config.FocusPos);
-  const bool changed_mtu = (config_.mtu != config.mtu);
 
   if (changed_auto_master)
   {
@@ -1653,20 +1645,6 @@ void CameraAravisNodelet::rosReconfigureCallback(Config &config, uint32_t level)
     }
     else
       ROS_INFO("Camera does not support FocusPos.");
-  }
-
-  if (changed_mtu)
-  {
-    if (implemented_features_["GevSCPSPacketSize"])
-    {
-      ROS_INFO("Set mtu = %d", config.mtu);
-      aravis::device::feature::set_integer(p_device_, "GevSCPSPacketSize", config.mtu);
-      ros::Duration(1.0).sleep();
-      config.mtu = aravis::device::feature::get_integer(p_device_, "GevSCPSPacketSize");
-      ROS_INFO("Get mtu = %d", config.mtu);
-    }
-    else
-      ROS_INFO("Camera does not support mtu (i.e. GevSCPSPacketSize).");
   }
 
   if (changed_acquisition_mode)
