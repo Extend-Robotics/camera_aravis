@@ -136,7 +136,7 @@ ROS time.
 
 ### MTU
 
-For GigE Vision cameras in high bandwidth scenarios you may need to increase MTU for more fps.
+For GigE Vision cameras in high bandwidth scenarios you may need to increase MTU for more fps
 
 On OS side you may do it with `ip`
 
@@ -151,6 +151,13 @@ On device side you may do it with GenICam:
 - `GevSCPSPacketSize` or `DeviceStreamChannelPacketSize`
 
 For example see [`photoneo_motioncam.launch`](https://github.com/Extend-Robotics/camera_aravis/blob/extend/launch/photoneo_motioncam.launch)
+
+Notes:
+- if you have switch between CPU and camera
+  - that can do the fragmentation
+- you may be able to bump only camera MTU
+  - and get increased performance
+- this is handy when camera MTU is bottleneck for FPS but CPU can't increase MTU
 
 ### `ARV_BUFFER_STATUS_TIMEOUT`
 
