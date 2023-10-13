@@ -2,6 +2,15 @@
 Changelog for package camera_aravis
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.1.5 (2023-10-13)
+-------------------
+* document setting camera MTU through GenICam and on OS side
+* remove MTU from rosparams (wasn't working anyway, breaking change)
+* remove MTU from dynamic reconfigure (might cause corrupted data, breaking change)
+* MotionCam3D
+ * expose MTU setting through GenICam from launchfile (also example)
+ * expose setting white balance preset from launchfile
+
 4.1.4 (2023-08-16)
 -------------------
 * Always preffer multipart mode over chunked
