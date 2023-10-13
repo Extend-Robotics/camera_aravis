@@ -136,7 +136,15 @@ ROS time.
 
 ### MTU
 
-For GigE Vision cameras in high bandwidth scenarios you may need to increase MTU for more fps
+For GigE Vision cameras in high bandwidth scenarios you may need to increase MTU for more fps.
+
+Typically you would set matching MTU on host and camera but
+- if you have switch between host and camera
+  - that can do the fragmentation
+- you may be able to bump only camera MTU
+  - and get incresed performance
+
+#### Host MTU
 
 On OS side you may do it with `ip`
 
@@ -147,17 +155,25 @@ ip link list
 sudo ip link set dev enp60s0 mtu 9000
 ```
 
+Making the change permanent may vary depending on your OS and config.
+
+If in doubt use GUI or TUI.
+
+For Ubuntu 20.04 you may set it through [NetworkManager](https://wiki.gnome.org/Projects/NetworkManager):
+- GUI
+  - your wired interface -> settings "cog" -> Identity -> MTU
+- TUI cli interface `nmtui`
+  - edit a connection -> your wired interface -> ETHERNET <Show> -> MTU
+- CLI interface `nmcli`by command
+- `/etc/NetworkManager/system-connections/your_connection.nmconnection` config file
+  - which may not exist yet if you are running on defaults
+
+#### Camera MTU
+
 On device side you may do it with GenICam:
 - `GevSCPSPacketSize` or `DeviceStreamChannelPacketSize`
 
 For example see [`photoneo_motioncam.launch`](https://github.com/Extend-Robotics/camera_aravis/blob/extend/launch/photoneo_motioncam.launch)
-
-Notes:
-- if you have switch between CPU and camera
-  - that can do the fragmentation
-- you may be able to bump only camera MTU
-  - and get increased performance
-- this is handy when camera MTU is bottleneck for FPS but CPU can't increase MTU
 
 ### `ARV_BUFFER_STATUS_TIMEOUT`
 
