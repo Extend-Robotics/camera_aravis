@@ -2,6 +2,9 @@
 Changelog for package camera_aravis
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.1.6 (2023-10-16)
+-------------------
+* MotionCam3D - expose possibility to work beyond working range from launchfile
 4.1.5 (2023-10-13)
 -------------------
 * document setting camera MTU through GenICam and on OS side
