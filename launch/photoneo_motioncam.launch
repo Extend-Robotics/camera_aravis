@@ -17,6 +17,8 @@
   -->
   <arg name="operation_mode"           default="Camera"/> <!-- ["Camera", "Scanner"] -->
 
+  <arg name="calibration_volume_only"  default="true" />  <!-- if true the Range depth data is limited only to calibration volume (similar to working range specification) -->
+
   <!-- Device has multiple components.
 
        Supported in this launchfile:
@@ -198,7 +200,7 @@
     <param name="CodingStrategy"         value="Interreflections"/>
     <param name="CodingQuality"          value="High"/> <!-- Scanner only: [Fast, High, Ultra] -->
 
-    <param name="CalibrationVolumeOnly"  value="true" type="bool"/>
+    <param name="CalibrationVolumeOnly"  value="$(arg calibration_volume_only)" type="bool"/>
 
     <!-- RegularGrid required for higher resolution and modelling optics with intrinsics/distortion-->
     <param name="OutputTopology"         value="RegularGrid"/>
