@@ -188,7 +188,12 @@
     <param name="frame_id"               value="$(arg frame_id)"/>
     <param name="camera_info_url"        value="$(arg camera_info_url)"/>
 
+
     <!-- use GenICam SFNC names as stream control parameters -->
+
+    <!-- From firmware 1.13.0 SCAN-5003 changed default Scan3dOutputMode to wire inneficient Calibrated_ABC_Grid.  -->
+    <!-- We need the wire-efficient ProjectedC with pixel format Coord3D_C32f to get 10 FPS with RGB and Depth  -->
+    <param name="Scan3dOutputMode"         value="ProjectedC"/>
 
     <!-- MTU maps to GenICam GevSCPSPacketSize or DeviceStreamChannelPacketSize -->
     <param name="GevSCPSPacketSize"      value="$(arg mtu)" type="int" unless="$(eval mtu == 0)" />

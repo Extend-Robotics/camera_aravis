@@ -2,15 +2,15 @@
 
 <!--
 # Device: 0
-#  Name:                    MotionCam-3D-TRD-058
-#  Hardware Identification: TRD-058
+#  Name:                    MotionCam-3D-SBT-079
+#  Hardware Identification: SBT-079
 #  Type:                    MotionCam-3D
-#  Firmware version:        1.10.1
+#  Firmware version:        1.13.3
 #  Variant:                 M+
 #  IsFileCamera:            No
 #  Feature-Alpha:           No
 #  Feature-Color:           Yes
-#  Status:                  Not Attached to PhoXi Control. Ready to connect
+#  Status:                  Attached to PhoXi Control. Ready to connect
 
 # Device: 1
 #  Name:                    basic-example
@@ -34,7 +34,7 @@
 #  Feature-Color:           Yes
 #  Status:                  Not Attached to PhoXi Control. Ready to connect
 
-# You have no PhoXi device opened in PhoXi Control, the API Example will try to connect to first device in device list
+# You have already PhoXi device opened in PhoXi Control, the API Example is connected to device: SBT-079
 
 # ColorCameraImage (raw RGB, this is not depth aligned RGB texture!)
 # ColorCameraScale: 0.5x0.5
@@ -46,11 +46,11 @@
 # 3D sensor Y axis: [0; 1; 0]
 # 3D sensor Z axis: [0; 0; 1]
 
-# color camera position: [-285.575; 0.348021; -2.64781]
-# color camera X axis: [0.999758; -0.021911; -0.00175325]
-# color camera Y axis: [0.0219171; 0.999753; 0.00358584]
-# color camera Z axis: [0.00167425; -0.0036234; 0.999992]
+# color camera position: [-283.061; -1.00032; -4.84289]
+# color camera X axis: [0.995303; -0.00869798; -0.0964132]
+# color camera Y axis: [0.00895213; 0.999958; 0.0022038]
+# color camera Z axis: [0.0963899; -0.00305655; 0.995339]
 -->
 <launch>
-  <node pkg="tf2_ros" type="static_transform_publisher" name="range_color_camera_link_broadcaster" args="-0.285575 0.000348021 -0.00264781 0.00180242 0.000856928 -0.0109577 0.999938 range_optical_frame color_camera_optical_frame" />
+  <node pkg="tf2_ros" type="static_transform_publisher" name="range_color_camera_link_broadcaster" args="-0.283061 -0.00100032 -0.00484289 0.00131664 0.0482575 -0.00441772 0.998824 range_optical_frame color_camera_optical_frame" />
 </launch>
