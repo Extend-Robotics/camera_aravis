@@ -2,9 +2,14 @@
 Changelog for package camera_aravis
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.1.7 (2024-09-18)
+-------------------
+* MotionCam3D compatibility with firmware 1.13.3
+
 4.1.6 (2023-10-16)
 -------------------
 * MotionCam3D - expose possibility to work beyond working range from launchfile
+
 4.1.5 (2023-10-13)
 -------------------
 * document setting camera MTU through GenICam and on OS side
