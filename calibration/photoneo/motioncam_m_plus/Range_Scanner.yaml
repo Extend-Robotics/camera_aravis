@@ -1,8 +1,8 @@
 # Device: 0
-#  Name:                    MotionCam-3D-TRD-058
-#  Hardware Identification: TRD-058
+#  Name:                    MotionCam-3D-SBT-079
+#  Hardware Identification: SBT-079
 #  Type:                    MotionCam-3D
-#  Firmware version:        1.10.1
+#  Firmware version:        1.13.3
 #  Variant:                 M+
 #  IsFileCamera:            No
 #  Feature-Alpha:           No
@@ -31,20 +31,20 @@
 #  Feature-Color:           Yes
 #  Status:                  Not Attached to PhoXi Control. Ready to connect
 
-# You have already PhoXi device opened in PhoXi Control, the API Example is connected to device: TRD-058
+# You have already PhoXi device opened in PhoXi Control, the API Example is connected to device: SBT-079
 
 image_width: 1680
 image_height: 1200
-camera_name: TRD-058
+camera_name: SBT-079
 camera_matrix: 
   rows: 3
   cols: 3
-  data: [1738.15, 0, 853.754, 0, 1738.04, 589.2, 0, 0, 1]
+  data: [1731.75, 0, 831.222, 0, 1731.74, 606.459, 0, 0, 1]
 distortion_model: rational_polynomial
 distortion_coefficients: 
   rows: 1
   cols: 8
-  data: [-0.0810895, 0.105247, 9.91814e-05, 0.00054898, 0.0366575, 0.0, 0.0, 0.0]
+  data: [-0.0927104, 0.176941, 0.000490251, 0.000218982, -0.0903808, 0.0, 0.0, 0.0]
 rectification_matrix: 
   rows: 3
   cols: 3
@@ -52,4 +52,4 @@ rectification_matrix:
 projection_matrix: 
   rows: 3
   cols: 4
-  data: [1738.15, 0, 853.754, 0, 0, 1738.04, 589.2, 0, 0, 0, 1, 0]
+  data: [1731.75, 0, 831.222, 0, 0, 1731.74, 606.459, 0, 0, 0, 1, 0]
