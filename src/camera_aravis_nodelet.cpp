@@ -453,12 +453,15 @@ void CameraAravisNodelet::onInit()
   }
 
   disableComponents();
-  initPixelFormats();
 
-  // set automatic rosparam features before bounds checking
-  // as some settings have side effects on sensor size/ROI
+  // set automatic rosparam features before
+  // bounds checking and pixel formats setup
+  // as some settings have side effects on
+  // sensor size/ROI and available pixel formats
   // we will also set them second time (!)
   writeCameraFeaturesFromRosparamForStreams();
+
+  initPixelFormats();
 
   getBounds();
 
