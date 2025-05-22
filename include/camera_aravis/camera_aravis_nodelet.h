@@ -25,9 +25,7 @@
 #ifndef CAMERA_ARAVIS_CAMERA_ARAVIS_NODELET
 #define CAMERA_ARAVIS_CAMERA_ARAVIS_NODELET
 
-extern "C" {
 #include <arv.h>
-}
 
 #include <iostream>
 #include <stdlib.h>

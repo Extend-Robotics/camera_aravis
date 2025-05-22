@@ -24,9 +24,7 @@
 #ifndef CAMERA_ARAVIS_CAMERA_BUFFER_POOL
 #define CAMERA_ARAVIS_CAMERA_BUFFER_POOL
 
-extern "C" {
 #include <arv.h>
-}
 
 #include <ros/ros.h>
 #include <boost/weak_ptr.hpp>
